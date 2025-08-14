@@ -21,4 +21,4 @@ bun encode example
 bun decode fragments/*
 ```
 *** FILE STRUCTIRES**
-<img src='https://raw.githubusercontent.com/RestlessByte/gitzip/refs/heads/main/assets/structures/structures.png' width=130 height=130 alt='no image/>
+<img src='https://raw.githubusercontent.com/RestlessByte/gitzip/refs/heads/main/assets/structures/structures.png' width=130 height=130 alt='no image'/>
