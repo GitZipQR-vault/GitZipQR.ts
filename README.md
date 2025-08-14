@@ -20,11 +20,3 @@ bun encode example
 ```bash
 bun decode fragments/*
 ```
-*** FILE STRUCTIRES**\n
-root > gitzip\n
-├── qrcodes/       # QR images with metadata pointers
-│   ├── qr-0000.png [SCAN OUTPUT JSON FOR DECODE]\n
-│   └── ...\n
-└── fragments/     # JSON files with base64 data 
-    ├── fragment-0000.json [INPUT FROM COMMAND **bun decode fragment-0000.json**]
-    └── ...
