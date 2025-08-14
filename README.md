@@ -20,5 +20,5 @@ bun encode example
 ```bash
 bun decode fragments/*
 ```
-*** FILE STRUCTIRES**
-<img src='https://raw.githubusercontent.com/RestlessByte/gitzip/refs/heads/main/assets/structures/structures.png' width=130 height=130 alt='no image'/>
+# FILE STRUCTIRES
+<img src='https://raw.githubusercontent.com/RestlessByte/gitzip/refs/heads/main/assets/structures/structures.png' width=350 height=350 alt='no image'/>
