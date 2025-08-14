@@ -21,12 +21,10 @@ bun encode example
 bun decode fragments/*
 ```
 *** FILE STRUCTIRES**
-graph LR
-A[Source Directory] -->|Encode| B(QR Codes)
-A -->|Encode| C(JSON Fragments)
-B -->|Decode| D[Fragment Metadata]
-C -->|Read| E[Data Chunks]
-D --> F[Locate Fragments]
-E --> G[Reassemble Archive]
-F --> G
-G --> H[Restored Files]
+gitzip/
+├── qrcodes/       # QR images with metadata pointers
+│   ├── qr-0000.png [SCAN OUTPUT JSON FOR DECODE]
+│   └── ...
+└── fragments/     # JSON files with base64 data 
+    ├── fragment-0000.json [INPUT FROM COMMAND **bun decode fragment-0000.json**]
+    └── ...
