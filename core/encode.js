@@ -10,6 +10,16 @@ if (!inputDir) {
   process.exit(1);
 }
 
+// Получаем выходную папку из аргумента или используем по умолчанию
+const outputBaseDir = process.argv[3] || process.cwd();
+const qrDir = path.join(outputBaseDir, 'qrcodes');
+const fragmentsDir = path.join(outputBaseDir, 'fragments');
+
+// Создаем директории если нужно
+[qrDir, fragmentsDir].forEach(dir => {
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+});
+
 const archiveName = path.basename(inputDir) + ".zip";
 const archivePath = path.join("/tmp", archiveName);
 const output = fs.createWriteStream(archivePath);
@@ -17,7 +27,7 @@ const archive = archiver('zip', { zlib: { level: 9 } });
 
 output.on('close', () => {
   const data = fs.readFileSync(archivePath);
-  const chunkSize = 2000; // байт на чанк
+  const chunkSize = 2000;
   const totalChunks = Math.ceil(data.length / chunkSize);
   const globalHash = crypto.createHash('sha256').update(data).digest('hex');
 
@@ -35,30 +45,27 @@ output.on('close', () => {
     };
 
     const filename = `qr-${String(i).padStart(4, '0')}`;
-    const qrPath = path.join("./qrcodes", `${filename}.png`);
-    const jsonPath = path.join("./fragments", `${filename}.json`);
+    const qrPath = path.join(qrDir, `${filename}.png`);
+    const jsonPath = path.join(fragmentsDir, `${filename}.json`);
 
-    // Сохраняем полный JSON
     fs.writeFileSync(jsonPath, JSON.stringify(payload, null, 2));
 
-    // В QR — только мета-информация, без data
     const qrMeta = {
       chunk: i,
       total: totalChunks,
-      json: `${filename}.json`
+      json: path.relative(outputBaseDir, jsonPath)
     };
 
-    try {
-      qrcode.toFile(qrPath, JSON.stringify(qrMeta), { errorCorrectionLevel: 'H' });
-      console.log(`✅ QR ${i + 1}/${totalChunks}: ${qrPath}`);
-    } catch (err) {
-      console.error(`❌ Ошибка QR ${i}:`, err.message);
-    }
+    qrcode.toFile(qrPath, JSON.stringify(qrMeta), { errorCorrectionLevel: 'H' }, err => {
+      if (err) console.error(`❌ Ошибка QR ${i}:`, err.message);
+      else console.log(`✅ QR ${i + 1}/${totalChunks}: ${qrPath}`);
+    });
   }
 
-  console.log(`📦 Архив: ${archivePath}`);
-  console.log(`🧩 QR-коды: ./qrcodes/*.png`);
-  console.log(`🧾 JSON-фрагменты: ./fragments/*.json`);
+  console.log(`\n📦 Archive: ${archivePath}`);
+  console.log(`🧩 QR-codes: ${qrDir}/*.png`);
+  console.log(`🧾 JSON-fragments: ${fragmentsDir}/*.json`);
+  console.log(`🌍 All count chunks: ${totalChunks}`);
 });
 
 archive.pipe(output);

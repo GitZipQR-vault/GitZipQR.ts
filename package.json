@@ -1,20 +1,21 @@
 {
-  "name": "gitrip",
+  "name": "gitzip",
   "version": "1.0.0",
-  "description": "GITRIP-RELIC: Архив через QR-коды",
-  "main": "core/encode.js",
+  "description": "Encrypted QR ZIP Encoder by RestlessByte",
+  "main": "encode.js",
   "scripts": {
     "encode": "node core/encode.js",
     "decode": "node core/decode.js"
   },
+  "author": "RestlessByte",
+  "license": "MIT",
   "dependencies": {
     "archiver": "^5.3.1",
+    "crypto": "^1.0.1",
+    "fs": "^0.0.1-security",
+    "jimp": "^0.22.10",
+    "jsqr": "^1.4.0",
+    "path": "^0.12.7",
     "qrcode": "^1.5.1"
-  },
-  "devDependencies": {
-    "@types/bun": "latest"
-  },
-  "peerDependencies": {
-    "typescript": "^5.0.0"
   }
 }
