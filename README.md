@@ -22,3 +22,8 @@ bun decode fragments/*
 ```
 # FILE STRUCTIRES
 <img src='https://raw.githubusercontent.com/RestlessByte/gitzip/refs/heads/main/assets/structures/structures.png' width=550 height=550 alt='no image'/>
+
+# Docs
+
+- **/fragments** - dir with JSON data for decode
+- **/qrcodes** - dir with QR-codes during is scan output JSON data for decode data
