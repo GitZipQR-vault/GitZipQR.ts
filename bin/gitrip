@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+COMMAND="$1"
+TARGET="$2"
+
+case "$COMMAND" in
+  encode)
+    node ~/main/gitrip/core/encode.js "$TARGET"
+    ;;
+  decode)
+    node ~/main/gitrip/core/decode.js "$TARGET"
+    ;;
+  help|*)
+    echo "🧠 GITRIP-RELIC CLI"
+    echo "Usage:"
+    echo "  gitrip encode ./folder"
+    echo "  gitrip decode ./fragments/"
+    ;;
+esac
