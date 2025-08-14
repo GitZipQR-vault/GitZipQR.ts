@@ -8,17 +8,17 @@
 - 🔍 QR metadata recovery system
 
 # How Using?
-
+**2 ARGUMENTS (path, name-tag)**
 ```bash
 git clone git@github.com:RestlessByte/gitzip.git
 cd gitzip
 bun install
 mkdir -p example/gitzip
-bun encode example
+bun encode example example
 ```
 
 ```bash
-bun decode fragments/*
+bun decode example/fragments/* 
 ```
 # FILE STRUCTIRES
 <img src='https://raw.githubusercontent.com/RestlessByte/gitzip/refs/heads/main/assets/structures/structures.png' width=550 height=550 alt='no image'/>
