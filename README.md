@@ -10,7 +10,7 @@
 # How Using?
 **2 ARGUMENTS (path, name-tag)**
 ```bash
-git clone git@github.com:RestlessByte/gitzip.git
+git clone git@github.com:RestlessByte/GitZipQR.git
 cd gitzip
 bun install
 mkdir -p example/gitzip
