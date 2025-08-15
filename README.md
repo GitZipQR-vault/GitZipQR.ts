@@ -1,5 +1,5 @@
 # 🗂️ GitZipQR: Archive Distribution via QR Codes
-# 🕵️‍♂️ Privacy share data through QR codes
+# 🕵️‍♂️ Privacy share data through QR codes, without ethernet
 ## 🗄️GitZipQR encodes files/directories into multiple QR codes for physical storage or distribution. Each QR contains metadata pointing to a JSON fragment with actual data chunks. The system supports both digital and physical restoration.
 # Key Features:
 - 🔐 SHA-256 integrity checks
