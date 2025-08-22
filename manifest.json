@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "created_at": "2025-08-22T10:05:13.215Z",
+  "source_name": "confidential.zip",
+  "cipher": "AES-256-GCM",
+  "kdf": "scrypt",
+  "kdf_params": {
+    "N": 32768,
+    "r": 8,
+    "p": 1
+  },
+  "salt_b64": "RdxZ1M0aLBG4mSfa9J+hRA==",
+  "nonce_b64": "0OVV1G9fR4Mn8ixy",
+  "chunk_size": 65536,
+  "total_chunks": 12,
+  "cipher_sha256": "94a81e4c4e229327fa3d06edfb41f039761089e4d03dad35ba251ad6f9367339",
+  "merkle_root": null,
+  "notes": "Do not store passphrase with fragments."
+}

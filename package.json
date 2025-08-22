@@ -18,7 +18,10 @@
   },
   "dependencies": {
     "archiver": "^7.0.1",
-    "dotenv": "^16.6.1",
-    "qrcode": "^1.5.4"
+    "dotenv": "^17.2.1",
+    "jimp": "^1.6.0",
+    "jsqr": "^1.4.0",
+    "qrcode": "^1.5.4",
+    "qrcode-reader": "^1.0.4"
   }
 }
