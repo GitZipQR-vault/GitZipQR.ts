@@ -1,0 +1,6 @@
+*.bin.json -diff
+*.qr.json  -diff
+*.kdbx     binary
+*.zip      binary
+*.enc      binary
+*.png      binary

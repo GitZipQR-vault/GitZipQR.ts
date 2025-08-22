@@ -1,29 +1,15 @@
-# 🗂️ GitZipQR: Archive Distribution via QR Codes
-# 🕵️‍♂️ Privacy share data through QR codes, without ethernet
-## 🗄️GitZipQR encodes files/directories into multiple QR codes for physical storage or distribution. Each QR contains metadata pointing to a JSON fragment with actual data chunks. The system supports both digital and physical restoration.
-# Key Features:
-- 🔐 SHA-256 integrity checks
--  📦 Automatic archive splitting
-- 🧩 Dual storage (QR images + JSON fragments)
-- 🔍 QR metadata recovery system
+# GitZipQR — Secure Archive via JSON Chunks + QR Index
+Author: Daniil (RestlessByte) — https://github.com/RestlessByte
 
-# How Using?
-**2 ARGUMENTS (path, name-tag)**
-```bash
-git clone git@github.com:RestlessByte/GitZipQR.git
-cd gitzip
-bun install
-mkdir -p example/gitzip
-bun encode example example
-```
+GitZipQR packs a folder into a ZIP, encrypts it with AES-256-GCM (key via scrypt), splits the ciphertext into fixed-size JSON fragments (base64), and generates QR images with compact metadata.
 
-```bash
-bun decode example/fragments/* 
-```
-# FILE STRUCTIRES
-<img src='https://raw.githubusercontent.com/RestlessByte/gitzip/refs/heads/main/assets/structures/structures.png' width=550 height=550 alt='no image'/>
+## Quick Start
+npm i
+export PASSPHRASE='your strong passphrase'
+npm run encode -- ./example ./output
+export PASSPHRASE='your strong passphrase'
+npm run decode -- ./output/fragments ./restored
 
-# Docs
-
-- **/fragments** - dir with JSON data for decode
-- **/qrcodes** - dir with QR-codes during is scan output JSON data for decode data
+Notes:
+- CHUNK_SIZE env var controls chunk size (default 65536).
+- Keep PASSPHRASE outside the repo. manifest.json has no secrets.

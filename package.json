@@ -1,21 +1,24 @@
 {
-  "name": "gitzip",
-  "version": "1.0.0",
-  "description": "Encrypted QR ZIP Encoder by RestlessByte",
-  "main": "encode.js",
+  "name": "gitzipqr",
+  "version": "1.2.2",
+  "description": "Zip -> Encrypt (AES-256-GCM, scrypt) -> Split -> JSON chunks + QR index.",
+  "license": "MIT",
+  "author": "Daniil (RestlessByte) <localhost.l@yandex.com>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/RestlessByte/GitZipQR.git"
+  },
+  "type": "commonjs",
   "scripts": {
     "encode": "node core/encode.js",
     "decode": "node core/decode.js"
   },
-  "author": "RestlessByte",
-  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  },
   "dependencies": {
-    "archiver": "^5.3.1",
-    "crypto": "^1.0.1",
-    "fs": "^0.0.1-security",
-    "jimp": "^0.22.10",
-    "jsqr": "^1.4.0",
-    "path": "^0.12.7",
-    "qrcode": "^1.5.1"
+    "archiver": "^7.0.1",
+    "dotenv": "^16.6.1",
+    "qrcode": "^1.5.4"
   }
 }
