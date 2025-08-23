@@ -3,26 +3,19 @@
  * Author: Daniil (RestlessByte) — https://github.com/RestlessByte
  * License: MIT
  *
- * Restores an encrypted ZIP from:
- *  - a folder of QR images (PNG/JPG/JPEG), or
- *  - a folder of JSON fragments (*.bin.json), or a single fragment.
+ * Восстанавливает зашифрованный ZIP из:
+ *  - папки QR-изображений (PNG/JPG/JPEG), или
+ *  - папки JSON-фрагментов (*.bin.json), или одного файла-фрагмента.
  *
- * The script:
- *   1) Finds manifest.json near the input (same dir, parent, or CWD).
- *   2) If no fragments are present, it decodes all QR images and follows
- *      the relative fragment paths contained in QR JSON payloads.
- *   3) Verifies chunk hashes and global sha256, then decrypts AES-256-GCM
- *      using a key derived with scrypt(PASSPHRASE, salt).
+ * Алгоритм:
+ *   1) Ищет manifest.json рядом с вводом (та же папка, родитель или CWD).
+ *   2) Если фрагментов нет — декодирует QR картинки и берёт относительные пути к JSON.
+ *   3) Проверяет хэши кусков и общий sha256, затем расшифровывает AES-256-GCM
+ *      по ключу scrypt(ВведённыйПароль, salt из manifest.json).
  *
- * Usage:
+ * Запуск:
  *   bun run decode <qrcodes_or_fragments_dir_or_file> [output_dir]
- *   (Node works too: node core/decode.js ...)
- *
- * Env:
- *   .env must contain PASSPHRASE (>= 8 chars). Optional: CHUNK_SIZE.
  */
-
-require('dotenv').config();
 
 const fs = require('fs');
 const path = require('path');
@@ -32,6 +25,40 @@ const crypto = require('crypto');
 const jsQR = require('jsqr');
 const { PNG } = require('pngjs');
 const jpeg = require('jpeg-js');
+
+// -------- CLI hidden prompt --------
+function promptHidden(question) {
+  return new Promise((resolve, reject) => {
+    if (!process.stdin.isTTY) {
+      return reject(new Error('Нет интерактивного TTY для ввода пароля'));
+    }
+    process.stdout.write(question);
+    const stdin = process.stdin;
+    let buffer = '';
+    const onData = (data) => {
+      const s = data.toString('utf8');
+      // Ctrl+C
+      if (s === '\u0003') { cleanup(); process.stdout.write('\n'); reject(new Error('Операция прервана')); return; }
+      // Enter
+      if (s === '\r' || s === '\n') { cleanup(); process.stdout.write('\n'); resolve(buffer); return; }
+      // Backspace
+      if (s === '\u0008' || s === '\u007f') { buffer = buffer.slice(0, -1); return; }
+      buffer += s;
+    };
+    const cleanup = () => {
+      stdin.setRawMode(false);
+      stdin.pause();
+      stdin.removeListener('data', onData);
+    };
+    try {
+      stdin.setRawMode(true);
+      stdin.resume();
+      stdin.on('data', onData);
+    } catch (e) {
+      reject(e);
+    }
+  });
+}
 
 const inputArg = process.argv[2];
 if (!inputArg) {
@@ -92,32 +119,28 @@ function readRGBAFromImage(filePath) {
     return { data: png.data, width: png.width, height: png.height };
   } else {
     const raw = jpeg.decode(buf, { useTArray: true });
-    // jpeg-js returns {data: Uint8Array RGBA, width, height}
     return { data: raw.data, width: raw.width, height: raw.height };
   }
 }
 
 function decodeQRImage(filePath) {
   const { data, width, height } = readRGBAFromImage(filePath);
-  // jsQR expects Uint8ClampedArray of grayscale or RGBA Uint8ClampedArray; RGBA works fine
   const u8 = new Uint8ClampedArray(data.buffer, data.byteOffset, data.byteLength);
   const result = jsQR(u8, width, height);
-  if (!result || !result.data) throw new Error("QR not detected");
+  if (!result || !result.data) throw new Error("QR не распознан");
   let payload;
   try { payload = JSON.parse(result.data); }
-  catch { throw new Error("QR payload is not valid JSON"); }
-  return payload; // expected shape: { v, id, seq, total, json }
+  catch { throw new Error("QR payload не является валидным JSON"); }
+  return payload; // { v, id, seq, total, json }
 }
 
 function resolveFragmentPath(baseDir, relativeJsonPath) {
-  // Try relative to: baseDir, parent(baseDir), and CWD → choose first that exists
   const cands = [
     path.resolve(baseDir, relativeJsonPath),
     path.resolve(path.dirname(baseDir), relativeJsonPath),
     path.resolve(process.cwd(), relativeJsonPath),
   ];
   for (const p of cands) if (fs.existsSync(p)) return p;
-  // last resort: return the path relative to parent
   return cands[0];
 }
 
@@ -128,7 +151,7 @@ function resolveFragmentPath(baseDir, relativeJsonPath) {
   // 1) manifest
   const manifestPath = findManifest(input);
   if (!manifestPath) {
-    console.error("manifest.json not found near input. Place it in the same directory, parent, or CWD.");
+    console.error("manifest.json не найден рядом с входом. Положи его в ту же папку, родителя или CWD.");
     process.exit(1);
   }
   const manifest = JSON.parse(fs.readFileSync(manifestPath,'utf8'));
@@ -139,45 +162,44 @@ function resolveFragmentPath(baseDir, relativeJsonPath) {
   let fragmentFiles = listFragmentsFlexible(input);
 
   if (fragmentFiles.length === 0) {
-    // No .bin.json files → try QR images in arbitrary-named folder
+    // Нет .bin.json → пробуем QR-картинки
     const st = fs.statSync(input);
     if (!st.isDirectory()) {
-      console.error("Input is not a directory with QR images and no fragments were found.");
+      console.error("Вход не является папкой с QR и фрагменты не найдены.");
       process.exit(1);
     }
 
     const imgs = fs.readdirSync(input).filter(isImageFile).map(f=>path.join(input,f));
     if (imgs.length === 0) {
-      console.error("No *.bin.json and no QR images found in the input directory.");
+      console.error("Не найдено *.bin.json и QR-изображений в папке.");
       process.exit(1);
     }
 
-    console.log("📷 Decoding QR images...");
+    console.log("📷 Декодируем QR изображения...");
     const metas = [];
     for (const img of imgs) {
       try {
         const m = decodeQRImage(img);
         if (typeof m.seq !== 'number' || typeof m.total !== 'number' || !m.json) {
-          throw new Error("QR JSON missing required fields");
+          throw new Error("QR JSON не содержит обязательные поля");
         }
         metas.push({img, ...m});
         process.stdout.write(`OK ${path.basename(img)} → #${m.seq+1}/${m.total}\n`);
       } catch (e) {
-        console.error(`QR decode failed for ${path.basename(img)}: ${e.message}`);
+        console.error(`QR ошибка для ${path.basename(img)}: ${e.message}`);
         process.exit(1);
       }
     }
-    // sort and map to fragment paths
     metas.sort((a,b)=>a.seq-b.seq);
     fragmentFiles = metas.map(m => resolveFragmentPath(input, m.json));
   }
 
   if (fragmentFiles.length === 0) {
-    console.error("No fragments to restore.");
+    console.error("Нет фрагментов для восстановления.");
     process.exit(1);
   }
 
-  // 3) load fragments, verify, concatenate
+  // 3) грузим фрагменты, проверяем, конкатенируем
   const chunks = [];
   let archiveName = null;
 
@@ -192,7 +214,7 @@ function resolveFragmentPath(baseDir, relativeJsonPath) {
     const buf = Buffer.from(frag.data,'base64');
     const h  = crypto.createHash('sha256').update(buf).digest('hex');
     if (h !== frag.hash) {
-      console.error(`Chunk hash mismatch in ${path.basename(fp)} (expected ${frag.hash}, got ${h})`);
+      console.error(`Несовпадение хэша чанка в ${path.basename(fp)} (ожидалось ${frag.hash}, получили ${h})`);
       process.exit(1);
     }
     chunks[frag.chunk] = buf;
@@ -200,21 +222,27 @@ function resolveFragmentPath(baseDir, relativeJsonPath) {
 
   const present = chunks.filter(Boolean).length;
   if (expectedTotal && present !== expectedTotal) {
-    console.error(`Missing chunks: got ${present}/${expectedTotal}`);
+    console.error(`Не хватает чанков: получено ${present}/${expectedTotal}`);
     process.exit(1);
   }
 
   const encBuffer = Buffer.concat(chunks);
   const globalCheck = crypto.createHash('sha256').update(encBuffer).digest('hex');
   if (cipherSha256 && globalCheck !== cipherSha256) {
-    console.error(`Global sha256 mismatch. Expected ${cipherSha256}, got ${globalCheck}`);
+    console.error(`Глобальный sha256 не совпал. Ожидалось ${cipherSha256}, получили ${globalCheck}`);
     process.exit(1);
   }
 
-  // 4) decrypt AES-256-GCM
-  const PASSPHRASE = process.env.PASSPHRASE;
+  // 4) пароль и расшифровка AES-256-GCM
+  let PASSPHRASE;
+  try {
+    PASSPHRASE = await promptHidden('Пароль для расшифровки: ');
+  } catch (e) {
+    console.error(e.message || e);
+    process.exit(1);
+  }
   if (!PASSPHRASE || PASSPHRASE.length < 8) {
-    console.error("Set PASSPHRASE in .env (>=8 chars), same value as used during encode.");
+    console.error('Пароль должен быть не короче 8 символов.');
     process.exit(1);
   }
 
@@ -235,11 +263,11 @@ function resolveFragmentPath(baseDir, relativeJsonPath) {
   try {
     zip = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
   } catch {
-    console.error("Decryption failed. Wrong passphrase or corrupted data.");
+    console.error("❌ Расшифровка не удалась. Неверный пароль или повреждённые данные.");
     process.exit(1);
   }
 
   const outZip = path.join(outputDir, archiveName || 'restored.zip');
   fs.writeFileSync(outZip, zip);
-  console.log(`\n✅ Restored ZIP → ${outZip}`);
+  console.log(`\n✅ Восстановленный ZIP → ${outZip}`);
 })();

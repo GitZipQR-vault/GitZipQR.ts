@@ -1,5 +1,3 @@
-require('dotenv').config();
-
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
@@ -8,9 +6,54 @@ const archiver = require('archiver');
 const qrcode = require('qrcode');
 const { writeManifest } = require('./manifest');
 
+// -------- CLI hidden prompt --------
+function promptHidden(question, { confirm = false } = {}) {
+  return new Promise((resolve, reject) => {
+    if (!process.stdin.isTTY) {
+      return reject(new Error('Нет интерактивного TTY для ввода пароля'));
+    }
+    const readOnce = (q) =>
+      new Promise((res, rej) => {
+        process.stdout.write(q);
+        const stdin = process.stdin;
+        const onData = (data) => {
+          const s = data.toString('utf8');
+          // catch Ctrl+C
+          if (s === '\u0003') { cleanup(); process.stdout.write('\n'); rej(new Error('Операция прервана')); return; }
+          // enter
+          if (s === '\r' || s === '\n') { cleanup(); process.stdout.write('\n'); res(buffer); return; }
+          // backspace
+          if (s === '\u0008' || s === '\u007f') { buffer = buffer.slice(0, -1); return; }
+          // other
+          buffer += s;
+        };
+        const cleanup = () => {
+          stdin.setRawMode(false);
+          stdin.pause();
+          stdin.removeListener('data', onData);
+        };
+        let buffer = '';
+        stdin.setRawMode(true);
+        stdin.resume();
+        stdin.on('data', onData);
+      });
+
+    const flow = async () => {
+      const p1 = await readOnce(question);
+      if (!confirm) return p1;
+      const p2 = await readOnce('Повтори пароль: ');
+      if (p1 !== p2) throw new Error('Пароли не совпадают');
+      return p1;
+    };
+
+    flow().then(resolve).catch(reject);
+  });
+}
+
+// ------------- args & dirs -------------
 const inputDir = process.argv[2];
 if (!inputDir) {
-  console.error("Provide a directory to encode. Usage: node core/encode.js <input_dir> [output_dir]");
+  console.error("Укажи папку для кодирования. Пример: bun run encode ./mydata [./output]");
   process.exit(1);
 }
 const outputBaseDir = process.argv[3] || process.cwd();
@@ -18,18 +61,26 @@ const qrDir = path.join(outputBaseDir, 'qrcodes');
 const fragmentsDir = path.join(outputBaseDir, 'fragments');
 [qrDir, fragmentsDir].forEach(d => { if (!fs.existsSync(d)) fs.mkdirSync(d, { recursive: true }); });
 
-const PASSPHRASE = process.env.PASSPHRASE;
-if (!PASSPHRASE || PASSPHRASE.length < 8) {
-  console.error("Set PASSPHRASE in .env (>= 8 chars). Example: PASSPHRASE=your-strong-passphrase");
-  process.exit(1);
-}
-
-const CHUNK_SIZE = parseInt(process.env.CHUNK_SIZE || '65536', 10); // 64 KiB default
+// Настройки
+const CHUNK_SIZE = parseInt(process.env.CHUNK_SIZE || '65536', 10); // 64 KiB по умолчанию
 const SCRYPT = { N: 1 << 15, r: 8, p: 1, keyLen: 32 };
 const FRAGMENT_TYPE = "GitZipQR-CHUNK-ENC";
 
 (async () => {
-  // 1) Zip input directory into tmp (reproducible timestamps)
+  // 0) Пароль
+  let PASSPHRASE;
+  try {
+    PASSPHRASE = await promptHidden('Пароль для шифрования: ', { confirm: true });
+  } catch (e) {
+    console.error(e.message || e);
+    process.exit(1);
+  }
+  if (!PASSPHRASE || PASSPHRASE.length < 8) {
+    console.error('Пароль должен быть не короче 8 символов.');
+    process.exit(1);
+  }
+
+  // 1) Zip input directory в tmp (фиксированные timestamps для воспроизводимости)
   const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'gitzipqr-'));
   const archiveName = path.basename(path.resolve(inputDir)) + ".zip";
   const zipPath = path.join(tmpRoot, archiveName);
@@ -71,7 +122,7 @@ const FRAGMENT_TYPE = "GitZipQR-CHUNK-ENC";
 
   const cipherSha256 = await sha256File(encPath);
 
-  // 3) Chunk ciphertext
+  // 3) Делим на фрагменты + делаем QR с метаданными и относительной ссылкой на .bin.json
   const st = fs.statSync(encPath);
   const totalChunks = Math.ceil(st.size / CHUNK_SIZE);
   const fileId = crypto.createHash('sha256').update(archiveName + ':' + cipherSha256).digest('hex').slice(0, 16);
@@ -101,7 +152,7 @@ const FRAGMENT_TYPE = "GitZipQR-CHUNK-ENC";
       const jsonPath = path.join(fragmentsDir, `${base}.bin.json`);
       fs.writeFileSync(jsonPath, JSON.stringify(payload, null, 2));
 
-      // QR = только индекс/мета
+      // QR = только индекс/мета (весь payload в QR физически не влезет)
       const qrMeta = { v: 1, id: fileId, seq: i, total: totalChunks, json: path.relative(outputBaseDir, jsonPath) };
       const qrPath = path.join(qrDir, `${base}.png`);
       qrJobs.push(toQR(qrPath, JSON.stringify(qrMeta)));
@@ -126,7 +177,7 @@ const FRAGMENT_TYPE = "GitZipQR-CHUNK-ENC";
     cipherSha256
   });
 
-  console.log(`\nDone.
+  console.log(`\nГотово.
 ZIP:        ${zipPath}
 ENC:        ${encPath}  (sha256=${cipherSha256})
 Manifest:   ${path.join(outputBaseDir, 'manifest.json')}
