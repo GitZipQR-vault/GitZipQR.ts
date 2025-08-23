@@ -86,7 +86,7 @@ bun install
 ```bash
 docker build -t gitzipqr .
 # example encode inside container
-docker run --rm -v $(pwd):/data gitzipqr bun encode /data/example /data/crypto
+docker run -it --rm -v $(pwd):/data gitzipqr bun encode /data/example /data/crypto
 ```
 
 # Example Encode
