@@ -10,8 +10,9 @@
   },
   "type": "commonjs",
   "scripts": {
-    "encode": "node core/encode.js",
-    "decode": "node core/decode.js"
+    "encode": "bun run core/encode.ts",
+    "decode": "bun run core/decode.ts",
+    "custom-qr": "bun run customQR/index.ts"
   },
   "engines": {
     "node": ">=18"
