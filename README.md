@@ -78,7 +78,7 @@ Integrity: per-chunk SHA-256 + global SHA-256
 ```bash
 git clone git@github.com:RestlessByte/GitZipQR
 cd GitZipQR
-bun install   # or npm install
+bun install
 ```
 
 ### Docker
@@ -86,7 +86,7 @@ bun install   # or npm install
 ```bash
 docker build -t gitzipqr .
 # example encode inside container
-docker run --rm -v $(pwd):/data gitzipqr npm run encode -- /data/example /data/crypto
+docker run --rm -v $(pwd):/data gitzipqr bun encode /data/example /data/crypto
 ```
 
 # Example Encode
@@ -96,8 +96,7 @@ mkdir -p example
 echo "Hello World" > example/index.txt
 
 # 2) Encode → produces only QR PNGs (inline mode)
-bun run encode ./example ./crypto
-# or: npm run encode -- ./example ./crypto
+bun encode ./example ./crypto
 
 # 3) Inspect outputs
 ls -1 ./crypto/qrcodes | head -n 5
@@ -106,15 +105,14 @@ ls -1 ./crypto/qrcodes | head -n 5
 Generate the additional watermark QR independently:
 
 ```bash
-npm run custom-qr -- "some text" ./qrcode
+bun run custom-qr "some text" ./qrcode
 ```
 
 Example Decode
 ```bash
 # 4) Decode from QR images → restored ZIP in ./restore
 mkdir -p restore
-bun run decode ./crypto/qrcodes ./restore
-# or: npm run decode -- ./crypto/qrcodes ./restore
+bun decode ./crypto/qrcodes ./restore
 
 # 5) Verify ZIP content
 unzip -l ./restore/example.zip
