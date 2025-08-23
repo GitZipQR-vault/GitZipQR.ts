@@ -23,6 +23,7 @@ const archiver = require('archiver');
 const { Worker } = require('worker_threads');
 const { spawnSync } = require('child_process');
 const qrcode = require('qrcode'); // used for one-time capacity calibration
+const { generateCustomQRCode } = require('../customQR');
 
 const SCRYPT = {
   N: parseInt(process.env.SCRYPT_N || (1 << 15), 10),
@@ -85,7 +86,7 @@ function hasQrencode() {
 }
 function runWorker(task) {
   return new Promise((resolve) => {
-    const w = new Worker(path.join(__dirname, 'qr.worker.js'), { workerData: task });
+    const w = new Worker(path.join(__dirname, 'qr.worker.ts'), { workerData: task });
     w.once('message', (msg) => resolve(msg));
     w.once('error', (err) => resolve({ ok: false, error: String(err && err.message || err) }));
   });
@@ -286,7 +287,11 @@ if (!fs.existsSync(qrDir)) fs.mkdirSync(qrDir, { recursive: true });
   stepDone(fail === 0);
   if (fail) { console.error(`Some QR tasks failed: ${fail}`); process.exit(1); }
 
-  // STEP 7: summary
+  // STEP 7: custom next-gen QR with watermark
+  const customDir = path.join(outputBaseDir, 'qrcode');
+  if (!fs.existsSync(customDir)) fs.mkdirSync(customDir, { recursive: true });
+  await generateCustomQRCode(cipherSha256, path.join(customDir, 'custom.png'));
+  // STEP 8: summary
   console.log('\nDone.');
   console.log(`QRCodes:    ${qrDir}`);
   console.log(`Mode:       QR-ONLY (inline), ECL=${ECL}, workers=${MAX_WORKERS}${hasQrencode() ? ', native=qrencode' : ''}`);

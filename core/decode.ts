@@ -69,7 +69,7 @@ function runDecodePool(images) {
         const idx = i++;
         const img = images[idx];
         active++;
-        const w = new Worker(path.join(__dirname, 'qrdecode.worker.js'), { workerData: { img } });
+        const w = new Worker(path.join(__dirname, 'qrdecode.worker.ts'), { workerData: { img } });
         w.once('message', (msg) => {
           active--;
           results[idx] = msg;
