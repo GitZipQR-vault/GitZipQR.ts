@@ -1,6 +1,6 @@
 # GitZipQR — Secure Archives via Inline QR Codes 📦🔐📱
 
-![GitZipQR Structure](https://github.com/RestlessByte/GitZipQR/blob/main/structures.png)
+![GitZipQR Structure](https://github.com/RestlessByte/GitZipQR/blob/main/assets/structures/structures.png)
 
 **Author:** Daniil (RestlessByte) — https://github.com/RestlessByte  
 **License:** MIT  
