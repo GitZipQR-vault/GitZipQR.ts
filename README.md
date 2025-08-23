@@ -83,11 +83,49 @@ bun install   # or npm install
 
 ### Docker
 
-```bash
-docker build -t gitzipqr .
-# example encode inside container
-docker run --rm -v $(pwd):/data gitzipqr npm run encode -- /data/example /data/crypto
-```
+В репозитории присутствует `Dockerfile`, позволяющий запускать GitZipQR без установки Node.js или Bun.
+
+1. **Соберите образ**
+
+   ```bash
+   docker build -t gitzipqr .
+   ```
+
+2. **Кодирование каталога**
+
+   Для ввода пароля требуется интерактивный терминал (`-it`). Каталоги с исходными данными и результатом монтируются во внутренние пути контейнера.
+
+   ```bash
+   docker run --rm -it \
+     -v $(pwd)/example:/data/example \
+     -v $(pwd)/crypto:/data/crypto \
+     gitzipqr npm run encode -- /data/example /data/crypto
+   ```
+
+3. **Декодирование из QR**
+
+   ```bash
+   docker run --rm -it \
+     -v $(pwd)/crypto:/data/crypto \
+     -v $(pwd)/restore:/data/restore \
+     gitzipqr npm run decode -- /data/crypto/qrcodes /data/restore
+   ```
+
+4. **Генерация произвольного QR с водяным знаком**
+
+   ```bash
+   docker run --rm -v $(pwd):/data gitzipqr npm run custom-qr -- "some text" /data/qrcode
+   ```
+
+5. **Передача переменных окружения**
+
+   Для настройки производительности можно передавать переменные окружения с помощью `-e`.
+
+   ```bash
+   docker run --rm -e QR_WORKERS=8 -v $(pwd):/data gitzipqr npm run encode -- /data/example /data/crypto
+   ```
+
+Эти команды позволяют использовать GitZipQR в контейнере на любой платформе без установки зависимостей.
 
 # Example Encode
 ```bash
