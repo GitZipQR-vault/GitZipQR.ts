@@ -1,12 +1,12 @@
-# GitZipQR — Secure Archives via JSON Fragments + QR Index 📦🔐🧩
+# GitZipQR — Secure Archives via Inline QR Codes 📦🔐📱
 
 ![GitZipQR Structure](https://github.com/RestlessByte/GitZipQR/blob/main/structures.png)
 
 **Author:** Daniil (RestlessByte) — https://github.com/RestlessByte  
 **License:** MIT  
 
-GitZipQR turns any folder into a **reproducible ZIP**, encrypts it with **AES-256-GCM** (key derived via **scrypt**), splits the ciphertext into **fixed-size JSON fragments**, and generates **QR images** that point to those fragments.  
-On restore, you can scan a directory of QR images *or* use the JSON fragments directly — integrity is verified chunk-by-chunk and globally before decrypting.  
+GitZipQR turns any folder into a **reproducible ZIP**, encrypts it with **AES-256-GCM** (key derived via **scrypt**), splits the ciphertext into **QR-sized chunks**, and embeds each chunk **directly inside QR images** (base64 inline payloads).  
+On restore, you can decode only the QR images — integrity is verified chunk-by-chunk and globally before decrypting.  
 **Passwords are requested in the CLI** (hidden input) during both encode/decode. No secrets live in the repo. ✅  
 
 ---
@@ -15,11 +15,12 @@ On restore, you can scan a directory of QR images *or* use the JSON fragments di
 
 - **End-to-end encryption**: AES-256-GCM with scrypt KDF 🔒  
 - **Deterministic zipping**: normalized timestamps for reproducible archives 📦  
-- **Chunking**: ciphertext → fixed-size base64 JSON fragments 🧩  
-- **QR index**: compact QR payloads that reference fragment paths 🧾➡️📱  
-- **Integrity checks**: per-chunk SHA-256 + global SHA-256 ✅  
-- **Pure CLI flow**: hidden password prompts at encode/decode ⌨️  
-- **Portable artifacts**: `manifest.json`, `fragments/*.bin.json`, `qrcodes/*.png`  
+- **QR-ONLY storage**: ciphertext lives *inside* QR payloads (no external JSON needed) 📱  
+- **Auto capacity calibration**: picks optimal chunk size so each chunk fits in one QR ✅  
+- **Parallel QR generation/decoding**: uses all CPU cores; optional native `qrencode` for max perf ⚡  
+- **Integrity checks**: per-chunk SHA-256 + global SHA-256  
+- **Step-wise CLI log**: `STEP #N [1/0]` for each phase 🛠  
+- **Portable**: requires only QR PNGs and the passphrase to restore  
 
 ---
 
@@ -30,54 +31,69 @@ On restore, you can scan a directory of QR images *or* use the JSON fragments di
    - Key: scrypt(passphrase, salt, N/r/p, keyLen=32)  
    - Nonce: 12 random bytes  
    - Auth tag appended to ciphertext  
-3. **Chunk** ciphertext into fixed-size pieces (default **64 KiB**).  
-4. Each chunk → JSON fragment (metadata + base64 data).  
-   - SHA-256 of each chunk included  
-   - QR image generated with compact metadata `{v,id,seq,total,json}`  
-5. **manifest.json** written with public params (salt, nonce, KDF params, sizes, hashes).  
-6. **Restore** from fragments or QR:  
-   - Decode QR to locate fragment paths  
-   - Verify chunk hashes + global hash  
-   - Derive key via scrypt and decrypt with AES-GCM → original ZIP  
+3. **Calibrate QR capacity** (once) for chosen ECC level (default Q).  
+4. **Chunk** ciphertext into pieces that each fit in **one QR**.  
+5. Each chunk → inline QR payload:  
+   ```json
+   {
+     "type": "GitZipQR-CHUNK-ENC",
+     "version": "3.1-inline-only",
+     "fileId": "...",
+     "name": "folder.zip",
+     "chunk": 12,
+     "total": 345,
+     "hash": "<sha256 of raw chunk>",
+     "cipherHash": "<sha256 of full ciphertext+tag>",
+     "dataB64": "<base64 of raw chunk>",
+     "kdfParams": { "N": 32768, "r": 8, "p": 1 },
+     "saltB64": "...",
+     "nonceB64": "...",
+     "chunkSize": 3072
+   }
+6. Restore by scanning a folder of QR PNGs:
 
-> **Note:** QR codes contain *no secret data*. Security relies entirely on the passphrase + encrypted fragments.  
+**Decode** each QR → extract chunk data
 
----
+*Verify per-chunk + global hashes*
 
-## 🛡️ Security Model
+*Derive key via scrypt and decrypt with AES-GCM → original ZIP*
+🛡 Security Model
 
-- **Confidentiality & authenticity**: AES-256-GCM  
-- **KDF**: scrypt (`N=2^15, r=8, p=1`) slows brute-force  
-- **Passphrase**: never written to disk, always requested interactively  
-- **Manifest**: contains only *public* parameters (salt, nonce, sizes, hashes)  
-- **Integrity**: per-chunk SHA-256 + global SHA-256  
-- ⚠️ Use a **strong, unique, long passphrase** (≥12–16 chars). Weak passwords can be brute-forced.  
+Confidentiality & authenticity: AES-256-GCM
 
----
+KDF: scrypt (N=2^15, r=8, p=1) slows brute-force
 
-## 🚀 Quick Start
+Passphrase: never written to disk, always requested interactively
 
-### Install
+Integrity: per-chunk SHA-256 + global SHA-256
 
+⚠ Use a strong, unique, long passphrase (≥12–16 chars).
+
+# 🚀 Quick Start
+# Install
 ```bash
 git clone git@github.com:RestlessByte/GitZipQR
 cd GitZipQR
 bun install   # or npm install
+```
+
+# Example Encode
+```bash
 # 1) Prepare a sample folder
 mkdir -p example
-cat > example/index.txt <<'TXT'
-Hello World
-TXT
+echo "Hello World" > example/index.txt
 
-# 2) Encode → produces manifest.json, fragments/*.bin.json, qrcodes/*.png
+# 2) Encode → produces only QR PNGs (inline mode)
 bun run encode ./example ./crypto
 # or: npm run encode -- ./example ./crypto
 
 # 3) Inspect outputs
-ls -1 ./crypto
 ls -1 ./crypto/qrcodes | head -n 5
+```
 
-# 4) Decode from QR images → restored ZIP will be written into ./restore
+Example Decode
+```bash
+# 4) Decode from QR images → restored ZIP in ./restore
 mkdir -p restore
 bun run decode ./crypto/qrcodes ./restore
 # or: npm run decode -- ./crypto/qrcodes ./restore
@@ -85,58 +101,27 @@ bun run decode ./crypto/qrcodes ./restore
 # 5) Verify ZIP content
 unzip -l ./restore/example.zip
 
-# 6) Optional: extract and compare with original
+# 6) Extract and compare with original
 mkdir -p ./restore/_example
 unzip -q ./restore/example.zip -d ./restore/_example
 diff -ruN ./example ./restore/_example && echo "OK: restored matches original ✅"
 ```
+⚡ Performance Notes
 
-🗂️ Project Structure
+Uses multi-core workers for QR encoding/decoding.
 
-```graphql
-core/
-  encode.js        # ZIP → Encrypt → Chunk → Fragments + QR meta
-  decode.js        # QR → fragment paths → Verify + Decrypt → ZIP
-  manifest.js      # writes manifest.json (public params)
-qrcodes/           # generated QR images (metadata only)
-fragments/         # JSON fragments with base64 data
-manifest.json      # public parameters for KDF/GCM + sizes + hashes
-```
-📏 Defaults & Tuning
+If qrencode is installed (sudo apt install qrencode), native fast-path is used for PNG generation.
 
-Chunk size: CHUNK_SIZE env (default 65536 bytes).
+Environment variables:
 
-KDF (scrypt): defaults to N=2^15, r=8, p=1. Raise N for stronger KDF.
+QR_ECL=Q|H — error correction level (default Q for bigger capacity).
 
-Memory: scrypt uses up to ~512MB (configurable in code).
+QR_WORKERS=8 — number of worker threads (default = CPU cores).
 
-# 🧾 Fragment Format (*.bin.json)
-```json
-{
-  "type": "GitZipQR-CHUNK-ENC",
-  "version": "1.1",
-  "fileId": "9b2a1c3d55aae7f1",
-  "name": "myfolder.zip",
-  "chunk": 12,
-  "total": 345,
-  "hash": "<sha256 of raw chunk>",
-  "cipherHash": "<sha256 of full ciphertext+tag>",
-  "data": "<base64 of raw chunk bytes>"
-}
-```
+CHUNK_SIZE=... — override auto-detected chunk size.
 
-# 🧷 QR Payload (compact)
+SCRYPT_N/r/p — tune KDF hardness.
 
-```json
-{
-  "v": 1,
-  "id": "<fileId>",
-  "seq": 12,
-  "total": 345,
-  "json": "fragments/qr-000012.bin.json"
-}
-```
-## 📜 License
+# 📜 License
 
-* MIT © Daniil (RestlessByte)
-* https://github.com/RestlessByte
+**MIT © Daniil (RestlessByte) [https://github.com/RestlessByte]**
