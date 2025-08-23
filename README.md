@@ -1,5 +1,7 @@
 # GitZipQR — Secure Archives via JSON Fragments + QR Index 📦🔐🧩
-[https://github.com/RestlessByte/GitZipQR/blob/main/structures.png]
+
+![GitZipQR Structure](https://github.com/RestlessByte/GitZipQR/blob/main/structures.png)
+
 **Author:** Daniil (RestlessByte) — https://github.com/RestlessByte  
 **License:** MIT  
 
