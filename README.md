@@ -4,7 +4,9 @@
 
 **Author:** Daniil (RestlessByte) — https://github.com/RestlessByte  
 **License:** MIT  
-
+ 
+ # Dependencies
+ - (Bun Package Manager)(https://bun.sh/)
 GitZipQR turns any folder into a **reproducible ZIP**, encrypts it with **AES-256-GCM** (key derived via **scrypt**), splits the ciphertext into **QR-sized chunks**, and embeds each chunk **directly inside QR images** (base64 inline payloads).  
 On restore, you can decode only the QR images — integrity is verified chunk-by-chunk and globally before decrypting.  
 **Passwords are requested in the CLI** (hidden input) during both encode/decode. No secrets live in the repo. ✅  
