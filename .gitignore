@@ -1,4 +1,5 @@
 node_modules/
+Program/node_modules/
 .tmp/
 .DS_Store
 *.log

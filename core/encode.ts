@@ -23,7 +23,7 @@ const archiver = require('archiver');
 const { Worker } = require('worker_threads');
 const { spawnSync } = require('child_process');
 const qrcode = require('qrcode'); // used for one-time capacity calibration
-const { generateCustomQRCode } = require('../customQR');
+const readline = require('readline');
 
 const SCRYPT = {
   N: parseInt(process.env.SCRYPT_N || (1 << 15), 10),
@@ -55,13 +55,36 @@ function promptHidden(question, { confirm = false } = {}) {
       stdin.setRawMode(true); stdin.resume(); stdin.on('data', onData);
     });
     (async () => {
-      const p1 = await readOnce('Enter encryption password: ');
+      const p1 = await readOnce(question);
       if (!confirm) return p1;
       const p2 = await readOnce('Repeat password: ');
       if (p1 !== p2) throw new Error('Passwords do not match');
       return p1;
     })().then(resolve, reject);
   });
+}
+
+async function promptPasswordCount(def = 2) {
+  if (!process.stdin.isTTY) throw new Error('No interactive TTY is available for password input');
+  return await new Promise((resolve) => {
+    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+    rl.question(`Number of passwords [${def}]: `, (ans) => {
+      rl.close();
+      const n = parseInt(ans, 10);
+      resolve(Number.isFinite(n) && n > 0 ? n : def);
+    });
+  });
+}
+
+async function promptPasswords(defaultCount = 2) {
+  const count = await promptPasswordCount(defaultCount);
+  const parts = [];
+  for (let i = 1; i <= count; i++) {
+    const p = await promptHidden(`Password #${i}: `, { confirm: true });
+    if (!p || p.length < 8) throw new Error('Password must be at least 8 characters long.');
+    parts.push(p);
+  }
+  return parts.join('\u0000');
 }
 
 /* ---------------- Utils ---------------- */
@@ -130,7 +153,9 @@ async function calibrateMaxDataB64(basePayloadWithoutData) {
       return true;
     } catch (e) {
       const msg = String(e && e.message || e);
-      if (msg.includes('too big to be stored in a QR Code')) return false;
+      if (msg.includes('too big to be stored in a QR Code') ||
+          msg.includes('Array length must be a positive integer') ||
+          msg.includes('Invalid typed array length')) return false;
       throw e;
     }
   };
@@ -156,9 +181,8 @@ if (!fs.existsSync(qrDir)) fs.mkdirSync(qrDir, { recursive: true });
   // STEP 1: password
   stepStart(1, 'password');
   let PASSPHRASE;
-  try { PASSPHRASE = await promptHidden('', { confirm: true }); }
+  try { PASSPHRASE = await promptPasswords(); }
   catch (e) { stepDone(0); console.error(e.message || e); process.exit(1); }
-  if (!PASSPHRASE || PASSPHRASE.length < 8) { stepDone(0); console.error('Password must be at least 8 characters long.'); process.exit(1); }
   stepDone(1);
 
   // STEP 2: zip
@@ -286,12 +310,7 @@ if (!fs.existsSync(qrDir)) fs.mkdirSync(qrDir, { recursive: true });
   const { ok, fail } = await runPool(tasks);
   stepDone(fail === 0);
   if (fail) { console.error(`Some QR tasks failed: ${fail}`); process.exit(1); }
-
-  // STEP 7: custom next-gen QR with watermark
-  const customDir = path.join(outputBaseDir, 'qrcode');
-  if (!fs.existsSync(customDir)) fs.mkdirSync(customDir, { recursive: true });
-  await generateCustomQRCode(cipherSha256, path.join(customDir, 'custom.png'));
-  // STEP 8: summary
+  // STEP 7: summary
   console.log('\nDone.');
   console.log(`QRCodes:    ${qrDir}`);
   console.log(`Mode:       QR-ONLY (inline), ECL=${ECL}, workers=${MAX_WORKERS}${hasQrencode() ? ', native=qrencode' : ''}`);

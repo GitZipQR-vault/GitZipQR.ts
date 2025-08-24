@@ -8,5 +8,5 @@ RUN bun install --frozen-lockfile || bun install
 # Код проекта
 COPY . .
 
-# По умолчанию покажем help кастомного QR
-CMD ["bun","run","customQR/index.ts"]
+# By default show encoder usage
+CMD ["bun","run","core/encode.ts"]

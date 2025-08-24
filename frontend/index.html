@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>GitZipQR</title>
+  <link rel="stylesheet" href="index.css">
+</head>
+<body>
+  <div class="container">
+    <h1>GitZipQR</h1>
+    <div class="mode">
+      <label><input type="radio" name="mode" value="encode" checked> Encode</label>
+      <label><input type="radio" name="mode" value="decode"> Decode</label>
+    </div>
+    <div class="file">
+      <input type="file" id="fileInput" />
+    </div>
+    <div id="passwords"></div>
+    <button id="addPassword">Add password</button>
+    <button id="actionBtn">Start</button>
+    <div id="output"></div>
+  </div>
+  <script src="index.js"></script>
+</body>
+</html>
