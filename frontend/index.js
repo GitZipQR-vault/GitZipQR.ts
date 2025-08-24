@@ -9,9 +9,14 @@ const translations = {
     step4: "Embed each chunk directly into a QR image (base64 payload)",
     step5: "To restore, scan all QR codes and decrypt using the same password",
     encryptTitle: "Encrypt File",
+    decryptTitle: "Decrypt File",
     dropText: "Drop file here or click to select",
     addPass: "Add password",
-    encryptBtn: "Encrypt"
+    encryptBtn: "Encrypt",
+    decryptBtn: "Decrypt",
+    modeEncrypt: "Encrypt",
+    modeDecrypt: "Decrypt",
+    supportBtn: "Support via USDT"
   },
   ru: {
     title: "GitZipQR",
@@ -23,9 +28,14 @@ const translations = {
     step4: "Встроите каждую часть непосредственно в изображение QR (base64)",
     step5: "Для восстановления отсканируйте все QR-коды и расшифруйте тем же паролем",
     encryptTitle: "Зашифровать файл",
+    decryptTitle: "Расшифровать файл",
     dropText: "Перетащите файл сюда или нажмите для выбора",
     addPass: "Добавить пароль",
-    encryptBtn: "Зашифровать"
+    encryptBtn: "Зашифровать",
+    decryptBtn: "Расшифровать",
+    modeEncrypt: "Шифровать",
+    modeDecrypt: "Расшифровать",
+    supportBtn: "Поддержать USDT"
   }
 };
 
@@ -51,6 +61,7 @@ langBtn.addEventListener('click', () => {
 langMenu.querySelectorAll('button').forEach(btn => {
   btn.addEventListener('click', () => {
     applyLang(btn.dataset.lang);
+    setMode(mode);
     langMenu.classList.add('hidden');
   });
 });
@@ -62,9 +73,14 @@ applyLang('en');
 const dropZone = document.getElementById('dropZone');
 const fileInput = document.getElementById('fileInput');
 const addPassword = document.getElementById('addPassword');
-const encryptBtn = document.getElementById('encryptBtn');
+const actionBtn = document.getElementById('encryptBtn');
 const terminal = document.getElementById('terminal');
 const passwordsDiv = document.querySelector('.passwords');
+const modeEncrypt = document.getElementById('modeEncrypt');
+const modeDecrypt = document.getElementById('modeDecrypt');
+const modeTitle = document.getElementById('modeTitle');
+const supportBtn = document.getElementById('supportBtn');
+let mode = 'encrypt';
 let selectedFile = null;
 
 function log(msg) {
@@ -108,6 +124,18 @@ addPassword.addEventListener('click', () => {
   passwordsDiv.appendChild(inp);
 });
 
+function setMode(m) {
+  mode = m;
+  modeEncrypt.classList.toggle('active', mode === 'encrypt');
+  modeDecrypt.classList.toggle('active', mode === 'decrypt');
+  const strings = translations[currentLang];
+  modeTitle.textContent = strings[mode === 'encrypt' ? 'encryptTitle' : 'decryptTitle'];
+  actionBtn.textContent = strings[mode === 'encrypt' ? 'encryptBtn' : 'decryptBtn'];
+}
+
+modeEncrypt.addEventListener('click', () => setMode('encrypt'));
+modeDecrypt.addEventListener('click', () => setMode('decrypt'));
+
 async function encryptFile() {
   if (!selectedFile) { log('No file selected'); return; }
   const pwEls = passwordsDiv.querySelectorAll('input');
@@ -122,14 +150,66 @@ async function encryptFile() {
     const key = await crypto.subtle.deriveKey({ name: 'PBKDF2', salt, iterations: 100000, hash: 'SHA-256' }, pwKey, { name: 'AES-GCM', length: 256 }, false, ['encrypt']);
     const iv = crypto.getRandomValues(new Uint8Array(12));
     const cipher = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, data);
-    const out = new Uint8Array(salt.length + iv.length + cipher.byteLength);
-    out.set(salt, 0);
-    out.set(iv, salt.length);
-    out.set(new Uint8Array(cipher), salt.length + iv.length);
+    const ext = selectedFile.name.split('.').pop() || '';
+    const extBytes = new TextEncoder().encode(ext);
+    if (extBytes.length > 255) { log('Extension too long'); return; }
+    const out = new Uint8Array(1 + extBytes.length + salt.length + iv.length + cipher.byteLength);
+    let offset = 0;
+    out[offset++] = extBytes.length;
+    out.set(extBytes, offset); offset += extBytes.length;
+    out.set(salt, offset); offset += salt.length;
+    out.set(iv, offset); offset += iv.length;
+    out.set(new Uint8Array(cipher), offset);
+    const blob = new Blob([out], { type: 'application/octet-stream' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = selectedFile.name + '.enc';
+    a.click();
     log('Encryption complete. Bytes: ' + out.length);
   } catch (e) {
     log('Error: ' + e.message);
   }
 }
+async function decryptFile() {
+  if (!selectedFile) { log('No file selected'); return; }
+  const pwEls = passwordsDiv.querySelectorAll('input');
+  const pw = Array.from(pwEls).map(i => i.value).filter(Boolean).join('\u0000');
+  if (!pw) { log('No passwords provided'); return; }
+  log('Decrypting ' + selectedFile.name + ' ...');
+  try {
+    const bytes = new Uint8Array(await selectedFile.arrayBuffer());
+    let offset = 0;
+    const extLen = bytes[offset++];
+    const ext = new TextDecoder().decode(bytes.slice(offset, offset + extLen));
+    offset += extLen;
+    const salt = bytes.slice(offset, offset + 16); offset += 16;
+    const iv = bytes.slice(offset, offset + 12); offset += 12;
+    const cipher = bytes.slice(offset);
+    const enc = new TextEncoder();
+    const pwKey = await crypto.subtle.importKey('raw', enc.encode(pw), 'PBKDF2', false, ['deriveKey']);
+    const key = await crypto.subtle.deriveKey({ name: 'PBKDF2', salt, iterations: 100000, hash: 'SHA-256' }, pwKey, { name: 'AES-GCM', length: 256 }, false, ['decrypt']);
+    const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, cipher);
+    const blob = new Blob([plain]);
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'decoded' + (ext ? '.' + ext : '');
+    a.click();
+    log('Decryption complete. Extension: ' + (ext ? '.' + ext : 'none'));
+  } catch (e) {
+    log('Error: ' + e.message);
+  }
+}
 
-encryptBtn.addEventListener('click', encryptFile);
+const USDT_ADDRESS = '0xa8b3A40008EDF9AF21D981Dc3A52aa0ed1cA88fD';
+supportBtn.addEventListener('click', () => {
+  navigator.clipboard.writeText(USDT_ADDRESS).then(() => {
+    log('USDT address copied: ' + USDT_ADDRESS);
+  });
+});
+
+actionBtn.addEventListener('click', () => {
+  if (mode === 'encrypt') encryptFile();
+  else decryptFile();
+});
+
+setMode('encrypt');
