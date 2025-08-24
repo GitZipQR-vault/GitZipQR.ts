@@ -4,9 +4,12 @@
   <meta charset="UTF-8">
   <title>GitZipQR</title>
   <link rel="stylesheet" href="index.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode/1.5.1/qrcode.min.js"></script>
 </head>
 <body>
   <header class="top-bar">
+    <a id="metamaskLink" class="metamask-link" href="https://metamask.io" target="_blank">MetaMask</a>
     <div class="lang-switch">
       <button id="langBtn">Change language</button>
       <div id="langMenu" class="hidden">
@@ -17,7 +20,7 @@
   </header>
   <main>
     <div class="card">
-      <h1 data-i18n="title">GitZipQR</h1>
+      <h1 class="gradient-text" data-i18n="title">GitZipQR</h1>
       <p data-i18n="tagline">Secure archives through QR-coded encryption</p>
       <p data-i18n="intro">GitZipQR turns a folder into a deterministic ZIP, encrypts it with AES-256-GCM and stores the ciphertext inside QR codes.</p>
       <ol>

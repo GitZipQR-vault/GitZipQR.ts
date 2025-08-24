@@ -12,7 +12,11 @@ body {
 .top-bar {
   position: absolute;
   top: 10px;
+  left: 10px;
   right: 10px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
 
 .lang-switch button {
@@ -139,4 +143,23 @@ ol {
   background: #444;
   color: #fff;
   cursor: pointer;
+}
+
+.gradient-text {
+  background: linear-gradient(45deg, #ff7e00, #ffe347);
+  -webkit-background-clip: text;
+  color: transparent;
+}
+
+.metamask-link {
+  background: linear-gradient(45deg, #f6851b, #ffcd4d);
+  color: #000;
+  padding: 6px 12px;
+  border-radius: 4px;
+  text-decoration: none;
+  font-weight: bold;
+}
+
+.metamask-link:hover {
+  opacity: 0.8;
 }
