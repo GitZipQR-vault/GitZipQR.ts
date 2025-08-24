@@ -78,7 +78,9 @@ Integrity: per-chunk SHA-256 + global SHA-256
 ```bash
 git clone git@github.com:RestlessByte/GitZipQR
 cd GitZipQR
-bun install
+# dependencies are vendored; bun install is usually unnecessary
+# but if you need to refresh them, the repo uses npmmirror via .npmrc
+bun install || echo "offline mode"
 ```
 
 ### Docker
