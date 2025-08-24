@@ -20,10 +20,9 @@
   "dependencies": {
     "archiver": "^7.0.1",
     "jimp": "^1.6.0",
+    "jpeg-js": "^0.4.4",
     "jsqr": "^1.4.0",
     "pngjs": "^7.0.0",
-    "jpeg-js": "^0.4.4",
-    "qrcode": "^1.5.4",
-    "qrcode-reader": "^1.0.4"
+    "qrcode": "^1.5.4"
   }
 }
