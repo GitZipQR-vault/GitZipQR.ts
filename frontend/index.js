@@ -1,91 +1,51 @@
-const fs = require('fs');
-const QRCode = require('qrcode');
-const JSZip = require('jszip');
-const { PNG } = require('pngjs');
-const jsQR = require('jsqr');
+const translations = {
+  en: {
+    title: "GitZipQR",
+    tagline: "Secure archives through QR-coded encryption",
+    intro: "GitZipQR turns a folder into a deterministic ZIP, encrypts it with AES-256-GCM and stores the ciphertext inside QR codes.",
+    step1: "Zip the folder with normalized timestamps",
+    step2: "Derive a key via scrypt and encrypt with AES-256-GCM",
+    step3: "Split the ciphertext into QR-sized chunks",
+    step4: "Embed each chunk directly into a QR image (base64 payload)",
+    step5: "To restore, scan all QR codes and decrypt using the same password"
+  },
+  ru: {
+    title: "GitZipQR",
+    tagline: "Безопасные архивы через QR-коды",
+    intro: "GitZipQR превращает папку в детерминированный ZIP, шифрует его AES-256-GCM и сохраняет шифртекст внутри QR-кодов.",
+    step1: "Архивируйте папку с нормализованными отметками времени",
+    step2: "Получите ключ через scrypt и зашифруйте AES-256-GCM",
+    step3: "Разделите шифртекст на части размером с QR-код",
+    step4: "Встроите каждую часть непосредственно в изображение QR (base64)",
+    step5: "Для восстановления отсканируйте все QR-коды и расшифруйте тем же паролем"
+  }
+};
 
-const fileInput = document.getElementById('fileInput');
-const terminal = document.getElementById('terminal');
+const langBtn = document.getElementById('langBtn');
+const langMenu = document.getElementById('langMenu');
+let currentLang = 'en';
 
-function log(msg) {
-  const line = document.createElement('div');
-  line.textContent = msg;
-  line.className = 'line';
-  terminal.appendChild(line);
-  terminal.scrollTop = terminal.scrollHeight;
+function applyLang(lang) {
+  const strings = translations[lang];
+  document.querySelectorAll('[data-i18n]').forEach(el => {
+    const key = el.getAttribute('data-i18n');
+    if (strings[key]) {
+      el.textContent = strings[key];
+    }
+  });
+  currentLang = lang;
 }
 
-function triggerDownload(blob, name) {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = name;
-  document.body.appendChild(a);
-  a.click();
-  setTimeout(() => {
-    a.remove();
-    URL.revokeObjectURL(url);
-  }, 0);
-}
-
-async function encodeFile(file) {
-  log(`Encoding ${file.name}`);
-  const buffer = await fs.promises.readFile(file.path);
-  const chunkSize = 1000;
-  const total = Math.ceil(buffer.length / chunkSize);
-  const zip = new JSZip();
-  for (let i = 0; i < total; i++) {
-    const chunk = buffer.slice(i * chunkSize, (i + 1) * chunkSize);
-    const payload = {
-      file: file.name,
-      index: i,
-      total,
-      data: chunk.toString('base64')
-    };
-    const dataUrl = await QRCode.toDataURL(JSON.stringify(payload));
-    const b64 = dataUrl.split(',')[1];
-    zip.file(`qr_${String(i + 1).padStart(4, '0')}.png`, b64, { base64: true });
-    log(`QR ${i + 1}/${total}`);
-  }
-  const blob = await zip.generateAsync({ type: 'blob' });
-  triggerDownload(blob, `${file.name}.qrcodes.zip`);
-  log('Done.');
-}
-
-async function decodeZip(file) {
-  log(`Decoding ${file.name}`);
-  const data = await fs.promises.readFile(file.path);
-  const zip = await JSZip.loadAsync(data);
-  const chunks = [];
-  let targetName = 'output.bin';
-  for (const name of Object.keys(zip.files)) {
-    if (zip.files[name].dir) continue;
-    const img = await zip.files[name].async('nodebuffer');
-    const png = PNG.sync.read(img);
-    const code = jsQR(Uint8ClampedArray.from(png.data), png.width, png.height);
-    if (!code) continue;
-    const payload = JSON.parse(code.data);
-    chunks[payload.index] = Buffer.from(payload.data, 'base64');
-    targetName = payload.file;
-    log(`QR ${payload.index + 1}/${payload.total}`);
-  }
-  const buffer = Buffer.concat(chunks);
-  triggerDownload(new Blob([buffer]), targetName);
-  log('Done.');
-}
-
-document.getElementById('actionBtn').addEventListener('click', async () => {
-  const mode = document.querySelector('input[name="mode"]:checked').value;
-  const file = fileInput.files[0];
-  terminal.innerHTML = '';
-  if (!file) {
-    log('No file selected');
-    return;
-  }
-  try {
-    if (mode === 'encode') await encodeFile(file);
-    else await decodeZip(file);
-  } catch (err) {
-    log('Error: ' + err.message);
-  }
+langBtn.addEventListener('click', () => {
+  langMenu.classList.toggle('hidden');
 });
+
+langMenu.querySelectorAll('button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    applyLang(btn.dataset.lang);
+    langMenu.classList.add('hidden');
+  });
+});
+
+// set default language
+applyLang('en');

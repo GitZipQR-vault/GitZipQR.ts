@@ -6,16 +6,29 @@
   <link rel="stylesheet" href="index.css">
 </head>
 <body>
-  <div class="container">
-    <h1>GitZipQR</h1>
-    <div class="controls">
-      <label><input type="radio" name="mode" value="encode" checked> Encrypt</label>
-      <label><input type="radio" name="mode" value="decode"> Decrypt</label>
-      <input type="file" id="fileInput" />
-      <button id="actionBtn">Start</button>
+  <header class="top-bar">
+    <div class="lang-switch">
+      <button id="langBtn">Change language</button>
+      <div id="langMenu" class="hidden">
+        <button data-lang="en">English</button>
+        <button data-lang="ru">Русский</button>
+      </div>
     </div>
-    <div id="terminal" class="terminal"></div>
-  </div>
+  </header>
+  <main>
+    <div class="card">
+      <h1 data-i18n="title">GitZipQR</h1>
+      <p data-i18n="tagline">Secure archives through QR-coded encryption</p>
+      <p data-i18n="intro">GitZipQR turns a folder into a deterministic ZIP, encrypts it with AES-256-GCM and stores the ciphertext inside QR codes.</p>
+      <ol>
+        <li data-i18n="step1">Zip the folder with normalized timestamps</li>
+        <li data-i18n="step2">Derive a key via scrypt and encrypt with AES-256-GCM</li>
+        <li data-i18n="step3">Split the ciphertext into QR-sized chunks</li>
+        <li data-i18n="step4">Embed each chunk directly into a QR image (base64 payload)</li>
+        <li data-i18n="step5">To restore, scan all QR codes and decrypt using the same password</li>
+      </ol>
+    </div>
+  </main>
   <script src="index.js"></script>
 </body>
 </html>
