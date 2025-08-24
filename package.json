@@ -11,8 +11,7 @@
   "type": "commonjs",
   "scripts": {
     "encode": "bun run core/encode.ts",
-    "decode": "bun run core/decode.ts",
-    "desktop": "bunx electron electron.js"
+    "decode": "bun run core/decode.ts"
   },
   "engines": {
     "node": ">=18"
@@ -24,7 +23,6 @@
     "jsqr": "^1.4.0",
     "pngjs": "^7.0.0",
     "qrcode": "^1.5.4",
-    "electron": "^28.1.0",
     "jszip": "^3.10.1"
   }
 }
