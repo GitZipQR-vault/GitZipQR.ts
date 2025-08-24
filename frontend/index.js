@@ -160,12 +160,30 @@ async function encryptFile() {
     out.set(salt, offset); offset += salt.length;
     out.set(iv, offset); offset += iv.length;
     out.set(new Uint8Array(cipher), offset);
-    const blob = new Blob([out], { type: 'application/octet-stream' });
+
+    function toBase64(bytes) {
+      let binary = '';
+      const len = bytes.length;
+      for (let i = 0; i < len; i++) binary += String.fromCharCode(bytes[i]);
+      return btoa(binary);
+    }
+
+    const base64 = toBase64(out);
+    const chunkSize = 2500;
+    const zip = new JSZip();
+    const folder = zip.folder('QR-коды');
+    let count = 0;
+    for (let i = 0; i < base64.length; i += chunkSize) {
+      const chunk = base64.slice(i, i + chunkSize);
+      const dataUrl = await QRCode.toDataURL(chunk);
+      folder.file(`qr-${++count}.png`, dataUrl.split(',')[1], { base64: true });
+    }
+    const content = await zip.generateAsync({ type: 'blob' });
     const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = selectedFile.name + '.enc';
+    a.href = URL.createObjectURL(content);
+    a.download = 'swapinterfaces.zip';
     a.click();
-    log('Encryption complete. Bytes: ' + out.length);
+    log('Encryption complete. QR codes: ' + count);
   } catch (e) {
     log('Error: ' + e.message);
   }
@@ -203,7 +221,7 @@ async function decryptFile() {
 const USDT_ADDRESS = '0xa8b3A40008EDF9AF21D981Dc3A52aa0ed1cA88fD';
 supportBtn.addEventListener('click', () => {
   navigator.clipboard.writeText(USDT_ADDRESS).then(() => {
-    log('USDT address copied: ' + USDT_ADDRESS);
+    log('USDT address copied');
   });
 });
 
