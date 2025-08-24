@@ -24,8 +24,5 @@
     "jsqr": "^1.4.0",
     "pngjs": "^7.0.0",
     "qrcode": "^1.5.4"
-  },
-  "devDependencies": {
-    "electron": "^29.4.1"
   }
 }
