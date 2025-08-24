@@ -6,6 +6,7 @@
   <link rel="stylesheet" href="index.css">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode/1.5.1/qrcode.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jsqr/1.4.0/jsQR.min.js"></script>
 </head>
 <body>
   <header class="top-bar">
@@ -36,9 +37,9 @@
         <button id="modeEncrypt" class="active" data-i18n="modeEncrypt">Encrypt</button>
         <button id="modeDecrypt" data-i18n="modeDecrypt">Decrypt</button>
       </div>
-      <h2 id="modeTitle" data-i18n="encryptTitle">Encrypt File</h2>
-      <div id="dropZone" class="drop-zone" data-i18n="dropText">Drop file here or click to select</div>
-      <input type="file" id="fileInput" class="hidden" />
+      <h2 id="modeTitle" data-i18n="encryptTitle">Encrypt Folder</h2>
+      <div id="dropZone" class="drop-zone" data-i18n="dropText">Drop folder here or click to select</div>
+      <input type="file" id="fileInput" class="hidden" webkitdirectory multiple />
       <div class="passwords">
         <input type="password" class="password-field" placeholder="Password #1">
         <input type="password" class="password-field" placeholder="Password #2">
