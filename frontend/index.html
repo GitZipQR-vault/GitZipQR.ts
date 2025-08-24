@@ -29,7 +29,11 @@
       </ol>
     </div>
     <section id="encryptSection" class="card">
-      <h2 data-i18n="encryptTitle">Encrypt File</h2>
+      <div class="mode-toggle">
+        <button id="modeEncrypt" class="active" data-i18n="modeEncrypt">Encrypt</button>
+        <button id="modeDecrypt" data-i18n="modeDecrypt">Decrypt</button>
+      </div>
+      <h2 id="modeTitle" data-i18n="encryptTitle">Encrypt File</h2>
       <div id="dropZone" class="drop-zone" data-i18n="dropText">Drop file here or click to select</div>
       <input type="file" id="fileInput" class="hidden" />
       <div class="passwords">
@@ -39,6 +43,7 @@
       <button id="addPassword" data-i18n="addPass">Add password</button>
       <button id="encryptBtn" data-i18n="encryptBtn">Encrypt</button>
       <pre id="terminal" class="terminal"></pre>
+      <button id="supportBtn" data-i18n="supportBtn">Support via USDT</button>
     </section>
   </main>
   <script src="index.js"></script>
