@@ -1,49 +1,91 @@
-const passwordsDiv = document.getElementById('passwords');
+const fs = require('fs');
+const QRCode = require('qrcode');
+const JSZip = require('jszip');
+const { PNG } = require('pngjs');
+const jsQR = require('jsqr');
+
 const fileInput = document.getElementById('fileInput');
-const output = document.getElementById('output');
 const terminal = document.getElementById('terminal');
 
-function addPasswordField() {
-  const idx = passwordsDiv.querySelectorAll('input').length + 1;
-  const div = document.createElement('div');
-  const input = document.createElement('input');
-  input.type = 'password';
-  input.placeholder = `Password #${idx}`;
-  div.appendChild(input);
-  passwordsDiv.appendChild(div);
+function log(msg) {
+  const line = document.createElement('div');
+  line.textContent = msg;
+  line.className = 'line';
+  terminal.appendChild(line);
+  terminal.scrollTop = terminal.scrollHeight;
 }
 
-document.getElementById('addPassword').addEventListener('click', addPasswordField);
-for (let i = 0; i < 2; i++) addPasswordField();
+function triggerDownload(blob, name) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => {
+    a.remove();
+    URL.revokeObjectURL(url);
+  }, 0);
+}
 
-document.getElementById('actionBtn').addEventListener('click', () => {
+async function encodeFile(file) {
+  log(`Encoding ${file.name}`);
+  const buffer = await fs.promises.readFile(file.path);
+  const chunkSize = 1000;
+  const total = Math.ceil(buffer.length / chunkSize);
+  const zip = new JSZip();
+  for (let i = 0; i < total; i++) {
+    const chunk = buffer.slice(i * chunkSize, (i + 1) * chunkSize);
+    const payload = {
+      file: file.name,
+      index: i,
+      total,
+      data: chunk.toString('base64')
+    };
+    const dataUrl = await QRCode.toDataURL(JSON.stringify(payload));
+    const b64 = dataUrl.split(',')[1];
+    zip.file(`qr_${String(i + 1).padStart(4, '0')}.png`, b64, { base64: true });
+    log(`QR ${i + 1}/${total}`);
+  }
+  const blob = await zip.generateAsync({ type: 'blob' });
+  triggerDownload(blob, `${file.name}.qrcodes.zip`);
+  log('Done.');
+}
+
+async function decodeZip(file) {
+  log(`Decoding ${file.name}`);
+  const data = await fs.promises.readFile(file.path);
+  const zip = await JSZip.loadAsync(data);
+  const chunks = [];
+  let targetName = 'output.bin';
+  for (const name of Object.keys(zip.files)) {
+    if (zip.files[name].dir) continue;
+    const img = await zip.files[name].async('nodebuffer');
+    const png = PNG.sync.read(img);
+    const code = jsQR(Uint8ClampedArray.from(png.data), png.width, png.height);
+    if (!code) continue;
+    const payload = JSON.parse(code.data);
+    chunks[payload.index] = Buffer.from(payload.data, 'base64');
+    targetName = payload.file;
+    log(`QR ${payload.index + 1}/${payload.total}`);
+  }
+  const buffer = Buffer.concat(chunks);
+  triggerDownload(new Blob([buffer]), targetName);
+  log('Done.');
+}
+
+document.getElementById('actionBtn').addEventListener('click', async () => {
   const mode = document.querySelector('input[name="mode"]:checked').value;
   const file = fileInput.files[0];
-  const passwords = Array.from(passwordsDiv.querySelectorAll('input')).map(i => i.value);
-  output.textContent = `${mode} with ${passwords.length} password(s)` + (file ? ` on ${file.name}` : '');
   terminal.innerHTML = '';
-  const messages = [
-    `$ ${mode}${file ? ' ' + file.name : ''}`,
-    'STEP #1 zip ... [1]',
-    'STEP #2 encrypt ... [1]',
-    'STEP #3 chunk & queue jobs ... [1]',
-    'STEP #4 encode QR in parallel ... [1]',
-    'Done.'
-  ];
-  let idx = 0;
-  function log(msg) {
-    const line = document.createElement('div');
-    line.textContent = msg;
-    line.className = 'line';
-    terminal.appendChild(line);
-    terminal.scrollTop = terminal.scrollHeight;
+  if (!file) {
+    log('No file selected');
+    return;
   }
-  function next() {
-    if (idx < messages.length) {
-      log(messages[idx++]);
-      setTimeout(next, 500);
-    }
+  try {
+    if (mode === 'encode') await encodeFile(file);
+    else await decodeZip(file);
+  } catch (err) {
+    log('Error: ' + err.message);
   }
-  next();
-  // TODO: integrate with backend or CLI
 });
