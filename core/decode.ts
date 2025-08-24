@@ -19,6 +19,7 @@ const path = require('path');
 const os = require('os');
 const crypto = require('crypto');
 const { Worker } = require('worker_threads');
+const readline = require('readline');
 
 const FRAGMENT_TYPE = "GitZipQR-CHUNK-ENC";
 const MAX_WORKERS = Math.max(1, parseInt(process.env.QR_WORKERS || String(os.cpus().length), 10));
@@ -27,21 +28,53 @@ function stepStart(n, label) { process.stdout.write(`STEP #${n} ${label} ... `);
 function stepDone(ok) { process.stdout.write(`[${ok ? 1 : 0}]\n`); }
 
 /* ---------------- Password (hidden) ---------------- */
-function promptHidden(question) {
+function promptHidden(question, { confirm = false } = {}) {
   return new Promise((resolve, reject) => {
     if (!process.stdin.isTTY) return reject(new Error('No interactive TTY is available for password input'));
-    process.stdout.write(question);
-    const stdin = process.stdin; let buf = '';
-    const onData = (d) => {
-      const s = d.toString('utf8');
-      if (s === '\u0003') { cleanup(); process.stdout.write('\n'); reject(new Error('Operation cancelled')); return; }
-      if (s === '\r' || s === '\n') { cleanup(); process.stdout.write('\n'); resolve(buf); return; }
-      if (s === '\u0008' || s === '\u007f') { buf = buf.slice(0, -1); return; }
-      buf += s;
-    };
-    const cleanup = () => { stdin.setRawMode(false); stdin.pause(); stdin.removeListener('data', onData); };
-    stdin.setRawMode(true); stdin.resume(); stdin.on('data', onData);
+    const readOnce = (q) => new Promise((res, rej) => {
+      process.stdout.write(q);
+      const stdin = process.stdin; let buf = '';
+      const onData = (d) => {
+        const s = d.toString('utf8');
+        if (s === '\u0003') { cleanup(); process.stdout.write('\n'); rej(new Error('Operation cancelled')); return; }
+        if (s === '\r' || s === '\n') { cleanup(); process.stdout.write('\n'); res(buf); return; }
+        if (s === '\u0008' || s === '\u007f') { buf = buf.slice(0, -1); return; }
+        buf += s;
+      };
+      const cleanup = () => { stdin.setRawMode(false); stdin.pause(); stdin.removeListener('data', onData); };
+      stdin.setRawMode(true); stdin.resume(); stdin.on('data', onData);
+    });
+    (async () => {
+      const p1 = await readOnce(question);
+      if (!confirm) return p1;
+      const p2 = await readOnce('Repeat password: ');
+      if (p1 !== p2) throw new Error('Passwords do not match');
+      return p1;
+    })().then(resolve, reject);
   });
+}
+
+async function promptPasswordCount(def = 2) {
+  if (!process.stdin.isTTY) throw new Error('No interactive TTY is available for password input');
+  return await new Promise((resolve) => {
+    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+    rl.question(`Number of passwords [${def}]: `, (ans) => {
+      rl.close();
+      const n = parseInt(ans, 10);
+      resolve(Number.isFinite(n) && n > 0 ? n : def);
+    });
+  });
+}
+
+async function promptPasswords(defaultCount = 2) {
+  const count = await promptPasswordCount(defaultCount);
+  const parts = [];
+  for (let i = 1; i <= count; i++) {
+    const p = await promptHidden(`Password #${i}: `, { confirm: true });
+    if (!p || p.length < 8) throw new Error('Password must be at least 8 characters long.');
+    parts.push(p);
+  }
+  return parts.join('\u0000');
 }
 
 function isImageFile(name){ return /\.(png|jpg|jpeg)$/i.test(name); }
@@ -191,8 +224,7 @@ if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir, { recursive: true });
   // STEP 3: decrypt AES-256-GCM
   stepStart(3, 'decrypt');
   if (!(kdf && salt && nonce)) { stepDone(0); console.error("Crypto parameters are missing in QR payloads. Re-encode inline."); process.exit(1); }
-  let pass; try { pass = await promptHidden('Enter decryption password: '); } catch(e){ stepDone(0); console.error(e.message||e); process.exit(1); }
-  if (!pass || pass.length < 8) { stepDone(0); console.error('Password must be at least 8 characters long.'); process.exit(1); }
+  let pass; try { pass = await promptPasswords(); } catch(e){ stepDone(0); console.error(e.message||e); process.exit(1); }
 
   const key = crypto.scryptSync(pass, salt, 32, { N: kdf.N, r: kdf.r, p: kdf.p, maxmem: 512*1024*1024 });
   const tag        = encBuffer.subarray(encBuffer.length - 16);

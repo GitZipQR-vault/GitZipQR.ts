@@ -11,8 +11,7 @@
   "type": "commonjs",
   "scripts": {
     "encode": "bun run core/encode.ts",
-    "decode": "bun run core/decode.ts",
-    "custom-qr": "bun run customQR/index.ts"
+    "decode": "bun run core/decode.ts"
   },
   "engines": {
     "node": ">=18"
