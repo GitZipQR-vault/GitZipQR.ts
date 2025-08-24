@@ -28,7 +28,8 @@ const readline = require('readline');
 const SCRYPT = {
   N: parseInt(process.env.SCRYPT_N || (1 << 15), 10),
   r: parseInt(process.env.SCRYPT_r || 8, 10),
-  p: parseInt(process.env.SCRYPT_p || 1, 10),
+  // Use all CPU cores by default for better scrypt performance
+  p: parseInt(process.env.SCRYPT_p || String(os.cpus().length), 10),
   keyLen: 32
 };
 const FRAGMENT_TYPE = "GitZipQR-CHUNK-ENC";
