@@ -63,3 +63,49 @@ body {
 ol {
   text-align: left;
 }
+
+/* Encryption section */
+.drop-zone {
+  border: 2px dashed #666;
+  padding: 20px;
+  margin-bottom: 10px;
+  cursor: pointer;
+}
+
+.drop-zone.hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.passwords {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.password-field {
+  padding: 6px;
+  border: 1px solid #555;
+  border-radius: 4px;
+  background: #111;
+  color: #fff;
+}
+
+#addPassword, #encryptBtn {
+  margin: 5px;
+  padding: 6px 12px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  background: #444;
+  color: #fff;
+}
+
+.terminal {
+  background: #000;
+  color: #0f0;
+  padding: 10px;
+  height: 150px;
+  overflow-y: auto;
+  text-align: left;
+}
