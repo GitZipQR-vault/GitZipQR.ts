@@ -85,6 +85,14 @@ const supportBtn = document.getElementById('supportBtn');
 let mode = 'encrypt';
 let selectedFiles = [];
 
+// Prevent the browser from opening files when dropping outside the zone
+['dragenter', 'dragover', 'dragleave', 'drop'].forEach(evt => {
+  document.addEventListener(evt, e => {
+    e.preventDefault();
+    e.stopPropagation();
+  });
+});
+
 function log(msg) {
   terminal.textContent += msg + '\n';
   terminal.scrollTop = terminal.scrollHeight;
@@ -237,13 +245,21 @@ async function encryptFolder() {
     }
 
     const base64 = toBase64(out);
-    const chunkSize = 2500;
+    let chunkSize = 2500;
+    while (chunkSize > 100) {
+      try {
+        await QRCode.toDataURL('a'.repeat(chunkSize), { errorCorrectionLevel: 'L' });
+        break;
+      } catch (err) {
+        if (err.message && err.message.includes('too big')) chunkSize -= 100; else throw err;
+      }
+    }
     const zip = new JSZip();
     const folder = zip.folder('QR-codes');
     let count = 0;
     for (let i = 0; i < base64.length; i += chunkSize) {
       const chunk = base64.slice(i, i + chunkSize);
-      const dataUrl = await QRCode.toDataURL(chunk);
+      const dataUrl = await QRCode.toDataURL(chunk, { errorCorrectionLevel: 'L' });
       folder.file(`qr-${++count}.png`, dataUrl.split(',')[1], { base64: true });
     }
     const content = await zip.generateAsync({ type: 'blob' });
@@ -292,11 +308,13 @@ async function decryptFolder() {
   if (!pw) { log('No passwords provided'); return; }
   log('Decrypting folder ...');
   try {
+    const jsqr = typeof jsQR !== 'undefined' ? jsQR : (typeof window !== 'undefined' ? window.jsQR : null);
+    if (typeof jsqr !== 'function') throw new Error('jsQR is not available');
     const files = selectedFiles.slice().sort((a,b)=>a.name.localeCompare(b.name));
     let base64 = '';
     for (const file of files) {
       const img = await fileToImageData(file);
-      const code = jsQR(img.data, img.width, img.height);
+      const code = jsqr(img.data, img.width, img.height);
       if (code) base64 += code.data;
     }
     const bytes = fromBase64(base64);
