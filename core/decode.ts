@@ -93,6 +93,17 @@ function listFragmentsFlexible(p) {
   return res;
 }
 
+function guessExtension(buf) {
+  if (!buf || buf.length < 4) return '';
+  const b = buf;
+  if (b.slice(0,8).equals(Buffer.from('89504e470d0a1a0a', 'hex'))) return '.png';
+  if (b.slice(0,3).equals(Buffer.from('ffd8ff', 'hex'))) return '.jpg';
+  if (b.slice(0,4).equals(Buffer.from('47494638', 'hex'))) return '.gif';
+  if (b.slice(0,4).equals(Buffer.from('25504446', 'hex'))) return '.pdf';
+  if (b.slice(0,4).equals(Buffer.from('504b0304', 'hex'))) return '.zip';
+  return '';
+}
+
 function runDecodePool(images) {
   let i = 0, active = 0;
   const results = new Array(images.length);
@@ -243,7 +254,11 @@ async function decode(inputPath, outputDir = process.cwd(), passwords) {
 
   // STEP 4: write output
   stepStart(4, 'write output');
-  const outName = archiveName || 'restored.bin';
+  let outName = archiveName || 'restored';
+  if (!path.extname(outName)) {
+    const ext = guessExtension(dataBuf);
+    outName += ext || '.bin';
+  }
   const outPath = path.join(outputDir, outName);
   fs.writeFileSync(outPath, dataBuf);
   stepDone(1);
