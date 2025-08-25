@@ -91,7 +91,7 @@ docker build -t gitzipqr .
 # encode inside container (entrypoint is `bun run`)
 docker run -it --rm -v $(pwd):/data gitzipqr encode /data/example.txt /data/out
 # decode
-docker run -it --rm -v $(pwd):/data gitzipqr decode /data/out/qrcodes /data/restore
+docker run -it --rm -v $(pwd):/data gitzipqr decode /data/out /data/restore
 ```
 
 # Example Encode
@@ -103,7 +103,7 @@ echo "Hello World" > hello.txt
 bun encode ./hello.txt ./crypto
 
 # 3) Inspect outputs
-ls -1 ./crypto/qrcodes | head -n 5
+ls -1 ./crypto | head -n 5
 ```
 
 Generate the additional watermark QR independently:
@@ -116,7 +116,7 @@ Example Decode
 ```bash
 # 4) Decode from QR images → restored file in ./restore
 mkdir -p restore
-bun decode ./crypto/qrcodes ./restore
+bun decode ./crypto ./restore
 
 # 5) Restored file is available with original name
 cat ./restore/hello.txt
@@ -139,7 +139,7 @@ const { encode, decode } = require('./sdk');
 
 (async () => {
   await encode('hello.txt', ['mySecret'], './crypto');
-  await decode('./crypto/qrcodes', ['mySecret'], './restore');
+  await decode('./crypto', ['mySecret'], './restore');
 })();
 ```
 ⚡ Performance Notes

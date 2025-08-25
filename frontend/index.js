@@ -17,27 +17,7 @@ const translations = {
     modeEncrypt: "Encrypt",
     modeDecrypt: "Decrypt",
     supportBtn: "Support via USDT",
-    walletLabel: "USDT Wallet:"
-  },
-  ru: {
-    title: "GitZipQR",
-    tagline: "Безопасные архивы через QR-коды",
-    intro: "GitZipQR превращает папку в детерминированный ZIP, шифрует его AES-256-GCM и сохраняет шифртекст внутри QR-кодов.",
-    step1: "Архивируйте папку с нормализованными отметками времени",
-    step2: "Получите ключ через scrypt и зашифруйте AES-256-GCM",
-    step3: "Разделите шифртекст на части размером с QR-код",
-    step4: "Встроите каждую часть непосредственно в изображение QR (base64)",
-    step5: "Для восстановления отсканируйте все QR-коды и расшифруйте тем же паролем",
-    encryptTitle: "Зашифровать папку",
-    decryptTitle: "Расшифровать папку",
-    dropText: "Перетащите папку или ZIP сюда или нажмите для выбора",
-    addPass: "Добавить пароль",
-    encryptBtn: "Зашифровать",
-    decryptBtn: "Расшифровать",
-    modeEncrypt: "Шифровать",
-    modeDecrypt: "Расшифровать",
-    supportBtn: "Поддержать USDT",
-    walletLabel: "USDT кошелек:"
+    walletLabel: "USDT Wallet:",
   }
 };
 
@@ -265,12 +245,11 @@ async function encryptFolder() {
       }
     }
     const zip = new JSZip();
-    const folder = zip.folder('QR-codes');
     let count = 0;
     for (let i = 0; i < base64.length; i += chunkSize) {
       const chunk = base64.slice(i, i + chunkSize);
       const dataUrl = await QRCode.toDataURL(chunk, { errorCorrectionLevel: 'L' });
-      folder.file(`qr-${++count}.png`, dataUrl.split(',')[1], { base64: true });
+      zip.file(`qr-${++count}.png`, dataUrl.split(',')[1], { base64: true });
     }
     const content = await zip.generateAsync({ type: 'blob' });
     const a = document.createElement('a');

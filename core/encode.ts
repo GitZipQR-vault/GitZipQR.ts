@@ -112,8 +112,8 @@ function readHead(filePath,n=16){
 }
 
 /* ---------------- Main API ---------------- */
-async function encode(inputPath, outputBaseDir = process.cwd(), passwords){
-  const qrDir = path.join(outputBaseDir,'qrcodes');
+async function encode(inputPath, outputDir = path.join(process.cwd(), 'qrcodes'), passwords){
+  const qrDir = outputDir;
   if(!fs.existsSync(qrDir)) fs.mkdirSync(qrDir,{recursive:true});
 
   // STEP 1: password
@@ -129,17 +129,17 @@ async function encode(inputPath, outputBaseDir = process.cwd(), passwords){
   const absInput = path.resolve(inputPath);
   const stInput  = fs.statSync(absInput);
 
-  const originalBase = path.basename(absInput);                // как назван исходник
+  const originalBase = path.basename(absInput);                // original file name
   const originalExt  = stInput.isDirectory() ? '' : path.extname(originalBase);
   const nameBase     = stInput.isDirectory()
-                        ? originalBase                         // имя папки (без .zip)
+                        ? originalBase                         // folder name (without .zip)
                         : (originalExt ? path.basename(originalBase, originalExt) : originalBase);
 
-  // Определяем итоговый ext для меты
+  // Determine final extension for metadata
   let metaExt = stInput.isDirectory() ? '.zip' : (originalExt || '');
   let dataPath;
   if (stInput.isDirectory()){
-    // На диск кладём ZIP (nameBase + .zip), но в мету: name=nameBase, ext=.zip
+    // Write ZIP to disk (nameBase + .zip), but in metadata: name=nameBase, ext=.zip
     const archiveNameOnDisk = nameBase + '.zip';
     dataPath = path.join(tmpRoot, archiveNameOnDisk);
     try {
@@ -155,11 +155,11 @@ async function encode(inputPath, outputBaseDir = process.cwd(), passwords){
       stepDone(1);
     } catch(e){ stepDone(0); throw new Error('Zip failed: ' + (e.message || e)); }
   } else {
-    // Одиночный файл: кладём как есть
-    const fileOnDisk = originalBase;                   // без изменений
+    // Single file: copy as is
+    const fileOnDisk = originalBase;                   // unchanged
     dataPath = path.join(tmpRoot, fileOnDisk);
     fs.copyFileSync(absInput, dataPath);
-    // Если у исходника не было расширения — попробуем определить по сигнатуре
+    // If the source file had no extension, try to detect by signature
     if (!metaExt){
       try { const head = readHead(dataPath, 16); const detected = detectExtByMagic(head); if (detected) metaExt = detected; } catch {}
     }
@@ -192,8 +192,8 @@ async function encode(inputPath, outputBaseDir = process.cwd(), passwords){
     type: FRAGMENT_TYPE,
     version: "3.1-inline-only",
     fileId: crypto.createHash('sha256').update(nameBase + ':' + cipherSha256).digest('hex').slice(0,16),
-    name: nameBase,            // ВСЕГДА без расширения
-    ext: metaExt || '',        // ВСЕГДА исходное расширение (или .zip для папок)
+    name: nameBase,            // always without extension
+    ext: metaExt || '',        // always original extension (or .zip for directories)
     chunk: 0, total: 1,
     hash: ''.padStart(64,'0'),
     cipherHash: cipherSha256,
@@ -261,7 +261,7 @@ async function encode(inputPath, outputBaseDir = process.cwd(), passwords){
 if (require.main === module) {
   const argv = process.argv.slice(2);
   const input = argv[0];
-  const outDir = argv[1] && !argv[1].startsWith('-') ? argv[1] : process.cwd();
+  const outDir = argv[1] && !argv[1].startsWith('-') ? argv[1] : undefined;
   if (!input) { console.error('Usage: bun run encode <input_file_or_dir> [output_dir]'); process.exit(1); }
   encode(input, outDir).catch((e)=>{ console.error(e.message || e); process.exit(1); });
 }
