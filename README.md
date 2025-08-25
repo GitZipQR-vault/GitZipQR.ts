@@ -8,9 +8,9 @@
  # Dependencies
  - **[Bun Package Manager](https://bun.sh/)**
 ---------------------------------
-GitZipQR turns any folder into a **reproducible ZIP**, encrypts it with **AES-256-GCM** (key derived via **scrypt**), splits the ciphertext into **QR-sized chunks**, and embeds each chunk **directly inside QR images** (base64 inline payloads). The toolkit is now written in **TypeScript** for stronger typing.
-On restore, you can decode only the QR images — integrity is verified chunk-by-chunk and globally before decrypting.  
-**Passwords are requested in the CLI** (hidden input) during both encode/decode. No secrets live in the repo. ✅  
+GitZipQR turns any file or folder into encrypted QR codes. Input data is optionally zipped (for folders), encrypted with **AES-256-GCM** (key derived via **scrypt**), split into **QR-sized chunks**, and each chunk is embedded **directly inside a QR image** as base64 payload. The toolkit is written in **TypeScript**.
+On restore, only the QR images are needed—integrity is verified chunk-by-chunk and globally before decrypting. If the source was a single file, it is recovered with its original extension.
+**Passwords are requested in the CLI** (hidden input) during both encode/decode. No secrets live in the repo. ✅
 
 ---
 
@@ -25,13 +25,14 @@ On restore, you can decode only the QR images — integrity is verified chunk-by
 - **Step-wise CLI log**: `STEP #N [1/0]` for each phase 🛠
 - **Portable**: requires only QR PNGs and the passphrase to restore
 - **Custom watermark QR**: generates an extra QR with a red `GitZipQR` watermark
+- **CLI & SDK**: use from terminal or via `require('./sdk')`
 
 ---
 
 ## 🔍 How It Works
 
-1. **Zip** the input directory (timestamps zeroed for reproducibility).  
-2. **Encrypt** the ZIP with AES-256-GCM.  
+1. **Prepare data**: if input is a directory it's zipped (timestamps zeroed); files are used as-is.
+2. **Encrypt** the data with AES-256-GCM.
    - Key: scrypt(passphrase, salt, N/r/p, keyLen=32)  
    - Nonce: 12 random bytes  
    - Auth tag appended to ciphertext  
@@ -56,11 +57,11 @@ On restore, you can decode only the QR images — integrity is verified chunk-by
    }
 6. Restore by scanning a folder of QR PNGs:
 
-**Decode** each QR → extract chunk data
+   **Decode** each QR → extract chunk data
 
-*Verify per-chunk + global hashes*
+   *Verify per-chunk + global hashes*
 
-*Derive key via scrypt and decrypt with AES-GCM → original ZIP*
+   *Derive key via scrypt and decrypt with AES-GCM → original file or ZIP*
 🛡 Security Model
 
 Confidentiality & authenticity: AES-256-GCM
@@ -87,18 +88,19 @@ bun install || echo "offline mode"
 
 ```bash
 docker build -t gitzipqr .
-# example encode inside container
-docker run -it --rm -v $(pwd):/data gitzipqr bun encode /data/example /data/crypto
+# encode inside container (entrypoint is `bun run`)
+docker run -it --rm -v $(pwd):/data gitzipqr encode /data/example.txt /data/out
+# decode
+docker run -it --rm -v $(pwd):/data gitzipqr decode /data/out/qrcodes /data/restore
 ```
 
 # Example Encode
 ```bash
-# 1) Prepare a sample folder
-mkdir -p example
-echo "Hello World" > example/index.txt
+# 1) Prepare a sample file
+echo "Hello World" > hello.txt
 
-# 2) Encode → produces only QR PNGs (inline mode)
-bun encode ./example ./crypto
+# 2) Encode → produces QR PNGs (inline mode)
+bun encode ./hello.txt ./crypto
 
 # 3) Inspect outputs
 ls -1 ./crypto/qrcodes | head -n 5
@@ -112,17 +114,25 @@ bun run custom-qr "some text" ./qrcode
 
 Example Decode
 ```bash
-# 4) Decode from QR images → restored ZIP in ./restore
+# 4) Decode from QR images → restored file in ./restore
 mkdir -p restore
 bun decode ./crypto/qrcodes ./restore
 
-# 5) Verify ZIP content
-unzip -l ./restore/example.zip
+# 5) Restored file is available with original name
+cat ./restore/hello.txt
+```
 
-# 6) Extract and compare with original
-mkdir -p ./restore/_example
-unzip -q ./restore/example.zip -d ./restore/_example
-diff -ruN ./example ./restore/_example && echo "OK: restored matches original ✅"
+### SDK
+
+Use the mini SDK for programmatic access from Node or the browser (via bundlers):
+
+```javascript
+const { encode, decode } = require('./sdk');
+
+(async () => {
+  await encode('hello.txt', ['mySecret'], './crypto');
+  await decode('./crypto/qrcodes', ['mySecret'], './restore');
+})();
 ```
 ⚡ Performance Notes
 

@@ -122,14 +122,10 @@ function runDecodePool(images) {
   });
 }
 
-/* ---------------- Main ---------------- */
-const inputArg = process.argv[2];
-const outputDir = (process.argv[3] && !process.argv[3].startsWith('-')) ? process.argv[3] : process.cwd();
-if (!inputArg) { console.error("Usage: bun run decode <qrcodes_or_fragments_dir_or_file> [output_dir]"); process.exit(1); }
-if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir, { recursive: true });
-
-(async function main(){
-  const input = path.resolve(inputArg);
+/* ---------------- Main API ---------------- */
+async function decode(inputPath, outputDir = process.cwd(), passwords) {
+  if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir, { recursive: true });
+  const input = path.resolve(inputPath);
 
   // STEP 1: collect inline QR payloads or fallback to legacy fragments
   stepStart(1, 'collect data');
@@ -224,27 +220,48 @@ if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir, { recursive: true });
   // STEP 3: decrypt AES-256-GCM
   stepStart(3, 'decrypt');
   if (!(kdf && salt && nonce)) { stepDone(0); console.error("Crypto parameters are missing in QR payloads. Re-encode inline."); process.exit(1); }
-  let pass; try { pass = await promptPasswords(); } catch(e){ stepDone(0); console.error(e.message||e); process.exit(1); }
+  let pass;
+  try {
+    pass = Array.isArray(passwords) && passwords.length ? passwords.join('\u0000') : await promptPasswords();
+  } catch (e) {
+    stepDone(0); throw e;
+  }
 
   const key = crypto.scryptSync(pass, salt, 32, { N: kdf.N, r: kdf.r, p: kdf.p, maxmem: 512*1024*1024 });
   const tag        = encBuffer.subarray(encBuffer.length - 16);
   const ciphertext = encBuffer.subarray(0, encBuffer.length - 16);
 
-  let zip;
+  let dataBuf;
   try {
     const decipher = crypto.createDecipheriv('aes-256-gcm', key, nonce);
     decipher.setAuthTag(tag);
-    zip = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
+    dataBuf = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
     stepDone(1);
   } catch {
     stepDone(0); console.error("Decryption failed. Wrong password or corrupted data."); process.exit(1);
   }
 
-  // STEP 4: write zip
-  stepStart(4, 'write zip');
-  const outZip = path.join(outputDir, archiveName || 'restored.zip');
-  fs.writeFileSync(outZip, zip);
+  // STEP 4: write output
+  stepStart(4, 'write output');
+  const outName = archiveName || 'restored.bin';
+  const outPath = path.join(outputDir, outName);
+  fs.writeFileSync(outPath, dataBuf);
   stepDone(1);
 
-  console.log(`\n✅ Restored ZIP → ${outZip}`);
-})();
+  if (archiveName && !archiveName.endsWith('.zip')) console.log(`\n✅ Restored file → ${outPath}`);
+  else console.log(`\n✅ Restored ZIP → ${outPath}`);
+
+  return outPath;
+}
+
+if (require.main === module) {
+  const inputArg = process.argv[2];
+  const outputDir = (process.argv[3] && !process.argv[3].startsWith('-')) ? process.argv[3] : process.cwd();
+  if (!inputArg) {
+    console.error("Usage: bun run decode <qrcodes_or_fragments_dir_or_file> [output_dir]");
+    process.exit(1);
+  }
+  decode(inputArg, outputDir).catch((e) => { console.error(e.message || e); process.exit(1); });
+}
+
+module.exports = { decode };
