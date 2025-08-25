@@ -9,7 +9,6 @@ const crypto = require('crypto');
 const archiver = require('archiver');
 const { Worker } = require('worker_threads');
 const { spawnSync } = require('child_process');
-const qrcode = require('qrcode');
 const readline = require('readline');
 
 const SCRYPT = {
@@ -203,18 +202,21 @@ async function encode(inputPath, outputDir = path.join(process.cwd(), 'qrcodes')
     chunkSize: 0
   };
   let maxDataB64;
-  try { maxDataB64 = await qrcode.toString(JSON.stringify({...baseMeta, dataB64:'A'}), { errorCorrectionLevel:ECL, margin:MARGIN })
-                      .then(async()=>{ // binary search
-                        let lo=1,hi=2048;
-                        const test=async(n)=>{ const t={...baseMeta,dataB64:'A'.repeat(n)}; try{ await qrcode.toString(JSON.stringify(t),{errorCorrectionLevel:ECL,margin:MARGIN}); return true; } catch(e){ return false; } };
-                        while(await test(hi)){ lo=hi; hi*=2; if(hi>1<<22) break; }
-                        while(lo<hi){ const mid=Math.floor((lo+hi+1)/2); if(await test(mid)) lo=mid; else hi=mid-1; }
-                        return Math.floor(lo*0.92);
-                      }); stepDone(1);
-  } catch(e){ stepDone(0); throw new Error('Calibration failed: ' + (e.message || e)); }
+  try {
+    const CAPACITY = { L:2953, M:2331, Q:1663, H:1273 }; // bytes for QR version 40
+    const maxBytes = CAPACITY[ECL] || CAPACITY.Q;
+    const overhead = Buffer.byteLength(JSON.stringify({ ...baseMeta, dataB64:'' }), 'utf8');
+    maxDataB64 = maxBytes - overhead;
+    if (maxDataB64 <= 0) throw new Error('metadata too large for chosen error correction level');
+    stepDone(1);
+  } catch(e){
+    stepDone(0);
+    throw new Error('Calibration failed: ' + (e.message || e));
+  }
 
-  const idealChunk = Math.max(512, Math.floor(maxDataB64*3/4*0.98));
+  const idealChunk = Math.max(512, Math.floor(maxDataB64 * 3/4 * 0.98));
   const CHUNK_SIZE = parseInt(process.env.CHUNK_SIZE || String(idealChunk), 10);
+  baseMeta.chunkSize = CHUNK_SIZE;
 
   // STEP 5: chunk & queue
   stepStart(5,`chunk & queue jobs (chunk_size=${CHUNK_SIZE}, ECL=${ECL}, workers=${MAX_WORKERS}${hasQrencode()?', native=qrencode':''})`);
