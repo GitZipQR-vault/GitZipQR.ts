@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>GitZipQR</title>
   <link rel="stylesheet" href="index.css">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
@@ -38,7 +39,7 @@
         <button id="modeDecrypt" data-i18n="modeDecrypt">Decrypt</button>
       </div>
       <h2 id="modeTitle" data-i18n="encryptTitle">Encrypt Folder</h2>
-      <div id="dropZone" class="drop-zone" data-i18n="dropText">Drop folder here or click to select</div>
+      <div id="dropZone" class="drop-zone" data-i18n="dropText">Drop folder or ZIP here or click to select</div>
       <input type="file" id="fileInput" class="hidden" webkitdirectory multiple />
       <div class="passwords">
         <input type="password" class="password-field" placeholder="Password #1">
@@ -48,6 +49,7 @@
       <button id="encryptBtn" data-i18n="encryptBtn">Encrypt</button>
       <pre id="terminal" class="terminal"></pre>
       <button id="supportBtn" data-i18n="supportBtn">Support via USDT</button>
+      <p class="wallet-display"><span data-i18n="walletLabel">USDT Wallet:</span> <code id="walletAddress"></code></p>
     </section>
   </main>
   <script src="index.js"></script>

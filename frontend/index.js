@@ -10,13 +10,14 @@ const translations = {
     step5: "To restore, scan all QR codes and decrypt using the same password",
     encryptTitle: "Encrypt Folder",
     decryptTitle: "Decrypt Folder",
-    dropText: "Drop folder here or click to select",
+    dropText: "Drop folder or ZIP here or click to select",
     addPass: "Add password",
     encryptBtn: "Encrypt",
     decryptBtn: "Decrypt",
     modeEncrypt: "Encrypt",
     modeDecrypt: "Decrypt",
-    supportBtn: "Support via USDT"
+    supportBtn: "Support via USDT",
+    walletLabel: "USDT Wallet:"
   },
   ru: {
     title: "GitZipQR",
@@ -29,13 +30,14 @@ const translations = {
     step5: "Для восстановления отсканируйте все QR-коды и расшифруйте тем же паролем",
     encryptTitle: "Зашифровать папку",
     decryptTitle: "Расшифровать папку",
-    dropText: "Перетащите папку сюда или нажмите для выбора",
+    dropText: "Перетащите папку или ZIP сюда или нажмите для выбора",
     addPass: "Добавить пароль",
     encryptBtn: "Зашифровать",
     decryptBtn: "Расшифровать",
     modeEncrypt: "Шифровать",
     modeDecrypt: "Расшифровать",
-    supportBtn: "Поддержать USDT"
+    supportBtn: "Поддержать USDT",
+    walletLabel: "USDT кошелек:"
   }
 };
 
@@ -124,6 +126,26 @@ async function getFilesFromItems(items) {
   return all;
 }
 
+async function handleFileSelection(files) {
+  let list = Array.isArray(files) ? files : Array.from(files);
+  if (mode === 'decrypt' && list.length === 1 && list[0].name.toLowerCase().endsWith('.zip')) {
+    const zip = await JSZip.loadAsync(list[0]);
+    const out = [];
+    const entries = Object.keys(zip.files);
+    await Promise.all(entries.map(async name => {
+      const file = zip.files[name];
+      if (!file.dir) {
+        const blob = await file.async('blob');
+        out.push(new File([blob], name));
+      }
+    }));
+    selectedFiles = out;
+  } else {
+    selectedFiles = list;
+  }
+  log('Files selected: ' + selectedFiles.length);
+}
+
 dropZone.addEventListener('click', () => fileInput.click());
 
 dropZone.addEventListener('dragover', (e) => {
@@ -136,17 +158,17 @@ dropZone.addEventListener('dragleave', () => dropZone.classList.remove('hover'))
 dropZone.addEventListener('drop', async (e) => {
   e.preventDefault();
   dropZone.classList.remove('hover');
+  let files;
   if (e.dataTransfer.items) {
-    selectedFiles = await getFilesFromItems(e.dataTransfer.items);
+    files = await getFilesFromItems(e.dataTransfer.items);
   } else {
-    selectedFiles = Array.from(e.dataTransfer.files);
+    files = Array.from(e.dataTransfer.files);
   }
-  log('Files selected: ' + selectedFiles.length);
+  await handleFileSelection(files);
 });
 
-fileInput.addEventListener('change', (e) => {
-  selectedFiles = Array.from(e.target.files);
-  log('Files selected: ' + selectedFiles.length);
+fileInput.addEventListener('change', async (e) => {
+  await handleFileSelection(e.target.files);
 });
 
 addPassword.addEventListener('click', () => {
@@ -165,6 +187,15 @@ function setMode(m) {
   const strings = translations[currentLang];
   modeTitle.textContent = strings[mode === 'encrypt' ? 'encryptTitle' : 'decryptTitle'];
   actionBtn.textContent = strings[mode === 'encrypt' ? 'encryptBtn' : 'decryptBtn'];
+  if (mode === 'encrypt') {
+    fileInput.setAttribute('webkitdirectory', '');
+    fileInput.removeAttribute('accept');
+  } else {
+    fileInput.removeAttribute('webkitdirectory');
+    fileInput.setAttribute('accept', '.zip,image/*');
+  }
+  fileInput.value = '';
+  selectedFiles = [];
 }
 
 modeEncrypt.addEventListener('click', () => setMode('encrypt'));
@@ -291,6 +322,7 @@ async function decryptFolder() {
 }
 
 const USDT_ADDRESS = '0xa8b3A40008EDF9AF21D981Dc3A52aa0ed1cA88fD';
+document.getElementById('walletAddress').textContent = USDT_ADDRESS;
 supportBtn.addEventListener('click', () => {
   navigator.clipboard.writeText(USDT_ADDRESS).then(() => {
     log('USDT address copied');
