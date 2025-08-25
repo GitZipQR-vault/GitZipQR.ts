@@ -1,7 +1,6 @@
 /**
  * GitZipQR — Encoder
  * Zip -> Encrypt (AES-256-GCM, scrypt) -> Chunk -> QR images.
- * See README for details.
  */
 const fs = require('fs');
 const os = require('os');
@@ -24,13 +23,11 @@ const ECL = (process.env.QR_ECL || 'Q').toUpperCase();
 const MARGIN = parseInt(process.env.QR_MARGIN || '1', 10);
 const MAX_WORKERS = Math.max(1, parseInt(process.env.QR_WORKERS || String(os.cpus().length), 10));
 
-/* ---------- helpers ---------- */
 function promptHidden(question) {
   return new Promise((resolve, reject) => {
     if (!process.stdin.isTTY) return reject(new Error('No interactive TTY is available for password input'));
     process.stdout.write(question);
-    const stdin = process.stdin;
-    let buf = '';
+    const stdin = process.stdin; let buf = '';
     const onData = (d) => {
       const s = d.toString('utf8');
       if (s === '\u0003') { cleanup(); process.stdout.write('\n'); return reject(new Error('Operation cancelled')); }
@@ -47,8 +44,7 @@ async function promptPasswordCount(def = 2) {
   return await new Promise((resolve) => {
     const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
     rl.question('AMOUNT NUMBER OF PASSWORD: ', (ans) => {
-      rl.close();
-      const n = parseInt(ans, 10);
+      rl.close(); const n = parseInt(ans, 10);
       resolve(Number.isFinite(n) && n > 0 ? n : def);
     });
   });
@@ -63,8 +59,9 @@ async function promptPasswords(defaultCount = 2) {
   }
   return parts.join('\u0000');
 }
-function stepStart(n, label) { process.stdout.write(`STEP #${n} ${label} ... `); }
-function stepDone(ok) { process.stdout.write(`[${ok ? 1 : 0}]\n`); }
+function stepStart(n, label){ process.stdout.write(`STEP #${n} ${label} ... `); }
+function stepDone(ok){ process.stdout.write(`[${ok ? 1 : 0}]\n`); }
+
 async function sha256File(p) {
   return new Promise((resolve, reject) => {
     const h = crypto.createHash('sha256');
@@ -74,238 +71,191 @@ async function sha256File(p) {
     s.on('data', d => h.update(d));
   });
 }
-function hasQrencode() {
-  const r = spawnSync('qrencode', ['--version'], { stdio: 'ignore' });
-  return r.status === 0;
-}
-function runWorker(task) {
+function hasQrencode(){ return spawnSync('qrencode', ['--version'], { stdio: 'ignore' }).status === 0; }
+function runWorker(task){
   return new Promise((resolve) => {
     const w = new Worker(path.join(__dirname, 'qr.worker.ts'), { workerData: task });
     w.once('message', (msg) => resolve(msg));
-    w.once('error', (err) => resolve({ ok: false, error: String(err && err.message || err) }));
+    w.once('error', (err) => resolve({ ok:false, error:String(err && err.message || err) }));
   });
 }
-async function runPool(tasks) {
-  let i = 0, active = 0, ok = 0, fail = 0;
-  return new Promise((resolve) => {
-    const total = tasks.length;
-    function launch() {
-      while (active < MAX_WORKERS && i < total) {
-        const t = tasks[i++];
-        active++;
-        runWorker(t).then((res) => {
-          active--;
-          if (res && res.ok) ok++; else fail++;
-          if ((ok + fail) % 50 === 0 || (ok + fail) === total) process.stdout.write(`QR ${ok + fail}/${total} completed\r`);
-          if (i < total) launch();
-          else if (active === 0) { process.stdout.write('\n'); resolve({ ok, fail }); }
+async function runPool(tasks){
+  let i=0,active=0,ok=0,fail=0;
+  return new Promise((resolve)=>{
+    const total=tasks.length;
+    function launch(){
+      while(active<MAX_WORKERS && i<total){
+        const t=tasks[i++]; active++;
+        runWorker(t).then((res)=>{
+          active--; if(res && res.ok) ok++; else fail++;
+          if((ok+fail)%50===0 || ok+fail===total) process.stdout.write(`QR ${ok+fail}/${total} completed\r`);
+          if(i<total) launch(); else if(active===0){ process.stdout.write('\n'); resolve({ok,fail}); }
         });
       }
-    }
-    launch();
+    } launch();
   });
 }
 
-/** Detect file extension by magic bytes (minimal set we support) */
-function detectExtByMagic(buf) {
-  if (!buf || buf.length < 4) return '';
-  if (buf.slice(0,8).equals(Buffer.from('89504e470d0a1a0a', 'hex'))) return '.png';
-  if (buf.slice(0,3).equals(Buffer.from('ffd8ff', 'hex'))) return '.jpg';
-  if (buf.slice(0,4).equals(Buffer.from('47494638', 'hex'))) return '.gif';
-  if (buf.slice(0,4).equals(Buffer.from('25504446', 'hex'))) return '.pdf';
-  if (buf.slice(0,4).equals(Buffer.from('504b0304', 'hex'))) return '.zip';
+/* ---- File type helpers ---- */
+function detectExtByMagic(buf){
+  if(!buf || buf.length<4) return '';
+  if(buf.slice(0,8).equals(Buffer.from('89504e470d0a1a0a','hex'))) return '.png';
+  if(buf.slice(0,3).equals(Buffer.from('ffd8ff','hex'))) return '.jpg';
+  if(buf.slice(0,4).equals(Buffer.from('47494638','hex'))) return '.gif';
+  if(buf.slice(0,4).equals(Buffer.from('25504446','hex'))) return '.pdf';
+  if(buf.slice(0,4).equals(Buffer.from('504b0304','hex'))) return '.zip';
   return '';
 }
-function readHead(filePath, n=16) {
-  const fd = fs.openSync(filePath, 'r');
-  const b = Buffer.alloc(n);
-  fs.readSync(fd, b, 0, n, 0);
-  fs.closeSync(fd);
-  return b;
-}
-
-/** Calibrate maximum QR capacity for our JSON payload */
-async function calibrateMaxDataB64(basePayloadWithoutData) {
-  const test = async (n) => {
-    const payload = { ...basePayloadWithoutData, dataB64: 'A'.repeat(n) };
-    const text = JSON.stringify(payload);
-    try {
-      await qrcode.toString(text, { errorCorrectionLevel: ECL, margin: MARGIN });
-      return true;
-    } catch (e) {
-      const msg = String(e && e.message || e);
-      if (msg.includes('too big to be stored in a QR Code') ||
-          msg.includes('Array length must be a positive integer') ||
-          msg.includes('Invalid typed array length')) return false;
-      throw e;
-    }
-  };
-  let lo = 1, hi = 2048;
-  while (await test(hi)) { lo = hi; hi *= 2; if (hi > 1 << 22) break; }
-  while (lo < hi) {
-    const mid = Math.floor((lo + hi + 1) / 2);
-    if (await test(mid)) lo = mid; else hi = mid - 1;
-  }
-  return Math.floor(lo * 0.92);
+function readHead(filePath,n=16){
+  const fd = fs.openSync(filePath,'r'); const b = Buffer.alloc(n);
+  fs.readSync(fd,b,0,n,0); fs.closeSync(fd); return b;
 }
 
 /* ---------------- Main API ---------------- */
-async function encode(inputPath, outputBaseDir = process.cwd(), passwords) {
-  const qrDir = path.join(outputBaseDir, 'qrcodes');
-  if (!fs.existsSync(qrDir)) fs.mkdirSync(qrDir, { recursive: true });
+async function encode(inputPath, outputBaseDir = process.cwd(), passwords){
+  const qrDir = path.join(outputBaseDir,'qrcodes');
+  if(!fs.existsSync(qrDir)) fs.mkdirSync(qrDir,{recursive:true});
 
   // STEP 1: password
-  stepStart(1, 'password');
+  stepStart(1,'password');
   let PASSPHRASE;
-  try {
-    PASSPHRASE = Array.isArray(passwords) && passwords.length ? passwords.join('\u0000') : await promptPasswords();
-  } catch (e) { stepDone(0); throw e; }
+  try { PASSPHRASE = Array.isArray(passwords)&&passwords.length ? passwords.join('\u0000') : await promptPasswords(); }
+  catch(e){ stepDone(0); throw e; }
   stepDone(1);
 
-  // STEP 2: prepare data (zip dir or copy file)
-  stepStart(2, 'prepare data');
-  const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'gitzipqr-'));
+  // STEP 2: prepare data
+  stepStart(2,'prepare data');
+  const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(),'gitzipqr-'));
   const absInput = path.resolve(inputPath);
-  const stInput = fs.statSync(absInput);
-  let archiveName = path.basename(absInput);
-  if (stInput.isDirectory()) archiveName += '.zip';
-  let archiveExt = path.extname(archiveName); // may be ''
-  let dataPath;
+  const stInput  = fs.statSync(absInput);
 
-  if (stInput.isDirectory()) {
-    dataPath = path.join(tmpRoot, archiveName);
+  const originalBase = path.basename(absInput);                // как назван исходник
+  const originalExt  = stInput.isDirectory() ? '' : path.extname(originalBase);
+  const nameBase     = stInput.isDirectory()
+                        ? originalBase                         // имя папки (без .zip)
+                        : (originalExt ? path.basename(originalBase, originalExt) : originalBase);
+
+  // Определяем итоговый ext для меты
+  let metaExt = stInput.isDirectory() ? '.zip' : (originalExt || '');
+  let dataPath;
+  if (stInput.isDirectory()){
+    // На диск кладём ZIP (nameBase + .zip), но в мету: name=nameBase, ext=.zip
+    const archiveNameOnDisk = nameBase + '.zip';
+    dataPath = path.join(tmpRoot, archiveNameOnDisk);
     try {
-      await new Promise((resolve, reject) => {
+      await new Promise((resolve,reject)=>{
         const out = fs.createWriteStream(dataPath);
-        const ar = archiver('zip', { zlib: { level: 9 } });
-        out.on('close', resolve);
-        ar.on('warning', reject);
-        ar.on('error', reject);
+        const ar = archiver('zip',{ zlib:{ level:9 } });
+        out.on('close',resolve); ar.on('warning',reject); ar.on('error',reject);
         ar.pipe(out);
-        ar.directory(absInput, false, (entry) => {
-          entry.stats = entry.stats || {};
-          entry.stats.mtime = new Date(0);
-          entry.stats.atime = new Date(0);
-          entry.stats.ctime = new Date(0);
-          return entry;
-        });
+        ar.directory(absInput,false,(entry)=>{ entry.stats=entry.stats||{};
+          entry.stats.mtime=new Date(0); entry.stats.atime=new Date(0); entry.stats.ctime=new Date(0); return entry; });
         ar.finalize();
       });
       stepDone(1);
-    } catch (e) { stepDone(0); throw new Error('Zip failed: ' + (e.message || e)); }
+    } catch(e){ stepDone(0); throw new Error('Zip failed: ' + (e.message || e)); }
   } else {
-    dataPath = path.join(tmpRoot, archiveName);
+    // Одиночный файл: кладём как есть
+    const fileOnDisk = originalBase;                   // без изменений
+    dataPath = path.join(tmpRoot, fileOnDisk);
     fs.copyFileSync(absInput, dataPath);
+    // Если у исходника не было расширения — попробуем определить по сигнатуре
+    if (!metaExt){
+      try { const head = readHead(dataPath, 16); const detected = detectExtByMagic(head); if (detected) metaExt = detected; } catch {}
+    }
     stepDone(1);
   }
 
-  // If no extension (single file named without .ext), detect by magic and store in metadata.
-  if (!archiveExt) {
-    try {
-      const head = readHead(dataPath, 16);
-      const detected = detectExtByMagic(head);
-      if (detected) archiveExt = detected; // do NOT rename file on disk; just remember meta
-    } catch { /* ignore */ }
-  }
-
-  // STEP 3: encrypt (AES-256-GCM; key = scrypt(pass, salt))
-  stepStart(3, 'encrypt');
+  // STEP 3: encrypt
+  stepStart(3,'encrypt');
   const salt = crypto.randomBytes(16);
   const nonce = crypto.randomBytes(12);
   let encPath;
-  try {
-    const key = crypto.scryptSync(PASSPHRASE, salt, SCRYPT.keyLen, { N: SCRYPT.N, r: SCRYPT.r, p: SCRYPT.p, maxmem: 512*1024*1024 });
+  try{
+    const key = crypto.scryptSync(PASSPHRASE, salt, 32, { N:SCRYPT.N, r:SCRYPT.r, p:SCRYPT.p, maxmem:512*1024*1024 });
     const cipher = crypto.createCipheriv('aes-256-gcm', key, nonce);
-    encPath = path.join(tmpRoot, (path.basename(archiveName) || 'data') + '.enc');
-    await new Promise((resolve, reject) => {
+    encPath = path.join(tmpRoot, 'payload.enc');
+    await new Promise((resolve,reject)=>{
       const input = fs.createReadStream(dataPath);
-      const output = fs.createWriteStream(encPath);
-      input.on('error', reject); output.on('error', reject); output.on('finish', resolve);
+      const output= fs.createWriteStream(encPath);
+      input.on('error',reject); output.on('error',reject); output.on('finish',resolve);
       input.pipe(cipher).pipe(output);
     });
-    const tag = cipher.getAuthTag();
-    fs.appendFileSync(encPath, tag);
+    const tag = cipher.getAuthTag(); fs.appendFileSync(encPath, tag);
     stepDone(1);
-  } catch (e) { stepDone(0); throw new Error('Encrypt failed: ' + (e.message || e)); }
+  } catch(e){ stepDone(0); throw new Error('Encrypt failed: ' + (e.message || e)); }
 
   // STEP 4: calibrate capacity
-  stepStart(4, 'calibrate QR capacity');
+  stepStart(4,'calibrate QR capacity');
   const cipherSha256 = await sha256File(encPath);
   const baseMeta = {
     type: FRAGMENT_TYPE,
     version: "3.1-inline-only",
-    fileId: crypto.createHash('sha256').update(archiveName + ':' + cipherSha256).digest('hex').slice(0, 16),
-    name: archiveName,             // может быть без .ext — это ок
-    ext: archiveExt || '',         // тут теперь гарантированно лежит нужный тип, если смогли определить
+    fileId: crypto.createHash('sha256').update(nameBase + ':' + cipherSha256).digest('hex').slice(0,16),
+    name: nameBase,            // ВСЕГДА без расширения
+    ext: metaExt || '',        // ВСЕГДА исходное расширение (или .zip для папок)
     chunk: 0, total: 1,
-    hash: ''.padStart(64, '0'),
+    hash: ''.padStart(64,'0'),
     cipherHash: cipherSha256,
-    kdfParams: { N: SCRYPT.N, r: SCRYPT.r, p: SCRYPT.p },
+    kdfParams: { N:SCRYPT.N, r:SCRYPT.r, p:SCRYPT.p },
     saltB64: salt.toString('base64'),
     nonceB64: nonce.toString('base64'),
     chunkSize: 0
   };
   let maxDataB64;
-  try { maxDataB64 = await calibrateMaxDataB64(baseMeta); stepDone(1); }
-  catch (e) { stepDone(0); throw new Error('Calibration failed: ' + (e.message || e)); }
+  try { maxDataB64 = await qrcode.toString(JSON.stringify({...baseMeta, dataB64:'A'}), { errorCorrectionLevel:ECL, margin:MARGIN })
+                      .then(async()=>{ // binary search
+                        let lo=1,hi=2048;
+                        const test=async(n)=>{ const t={...baseMeta,dataB64:'A'.repeat(n)}; try{ await qrcode.toString(JSON.stringify(t),{errorCorrectionLevel:ECL,margin:MARGIN}); return true; } catch(e){ return false; } };
+                        while(await test(hi)){ lo=hi; hi*=2; if(hi>1<<22) break; }
+                        while(lo<hi){ const mid=Math.floor((lo+hi+1)/2); if(await test(mid)) lo=mid; else hi=mid-1; }
+                        return Math.floor(lo*0.92);
+                      }); stepDone(1);
+  } catch(e){ stepDone(0); throw new Error('Calibration failed: ' + (e.message || e)); }
 
-  // Choose optimal chunk size
-  const idealChunk = Math.max(512, Math.floor(maxDataB64 * 3 / 4 * 0.98));
+  const idealChunk = Math.max(512, Math.floor(maxDataB64*3/4*0.98));
   const CHUNK_SIZE = parseInt(process.env.CHUNK_SIZE || String(idealChunk), 10);
 
   // STEP 5: chunk & queue
-  stepStart(5, `chunk & queue jobs (chunk_size=${CHUNK_SIZE}, ECL=${ECL}, workers=${MAX_WORKERS}${hasQrencode() ? ', native=qrencode' : ''})`);
+  stepStart(5,`chunk & queue jobs (chunk_size=${CHUNK_SIZE}, ECL=${ECL}, workers=${MAX_WORKERS}${hasQrencode()?', native=qrencode':''})`);
   const st = fs.statSync(encPath);
-  const totalChunks = Math.ceil(st.size / CHUNK_SIZE);
+  const totalChunks = Math.ceil(st.size/CHUNK_SIZE);
   const fileId = baseMeta.fileId;
-  const fd = fs.openSync(encPath, 'r');
+  const fd = fs.openSync(encPath,'r');
   const tasks = [];
-  try {
-    for (let i = 0; i < totalChunks; i++) {
-      const start = i * CHUNK_SIZE;
-      const end = Math.min(start + CHUNK_SIZE, st.size);
-      const buf = Buffer.alloc(end - start);
-      fs.readSync(fd, buf, 0, buf.length, start);
+  try{
+    for(let i=0;i<totalChunks;i++){
+      const start=i*CHUNK_SIZE, end=Math.min(start+CHUNK_SIZE, st.size);
+      const buf = Buffer.alloc(end-start); fs.readSync(fd, buf, 0, buf.length, start);
       const chunkHash = crypto.createHash('sha256').update(buf).digest('hex');
-      const b64 = buf.toString('base64');
-
       const payload = {
-        type: FRAGMENT_TYPE,
-        version: "3.1-inline-only",
-        fileId,
-        name: archiveName,
-        ext: archiveExt || '',
+        ...baseMeta,
         chunk: i,
         total: totalChunks,
         hash: chunkHash,
-        cipherHash: cipherSha256,
-        dataB64: b64,
-        kdfParams: { N: SCRYPT.N, r: SCRYPT.r, p: SCRYPT.p },
-        saltB64: salt.toString('base64'),
-        nonceB64: nonce.toString('base64'),
-        chunkSize: CHUNK_SIZE
+        dataB64: buf.toString('base64')
       };
       const outPath = path.join(qrDir, `qr-${String(i).padStart(6,'0')}.png`);
       tasks.push({ outPath, text: JSON.stringify(payload), useQrencode: hasQrencode(), ecl: ECL, margin: MARGIN });
     }
     stepDone(1);
-  } catch (e) { stepDone(0); throw new Error('Chunking failed: ' + (e.message || e)); }
+  } catch(e){ stepDone(0); throw new Error('Chunking failed: ' + (e.message || e)); }
   finally { fs.closeSync(fd); }
 
   // STEP 6: encode QR in parallel
-  stepStart(6, 'encode QR in parallel');
+  stepStart(6,'encode QR in parallel');
   const { ok, fail } = await runPool(tasks);
-  stepDone(fail === 0);
-  if (fail) throw new Error(`Some QR tasks failed: ${fail}`);
+  stepDone(fail===0);
+  if(fail) throw new Error(`Some QR tasks failed: ${fail}`);
 
   // STEP 7: summary
   console.log('\nDone.');
   console.log(`QRCodes:    ${qrDir}`);
-  console.log(`Mode:       QR-ONLY (inline), ECL=${ECL}, workers=${MAX_WORKERS}${hasQrencode() ? ', native=qrencode' : ''}`);
+  console.log(`Mode:       QR-ONLY (inline), ECL=${ECL}, workers=${MAX_WORKERS}${hasQrencode()? ', native=qrencode':''}`);
   console.log(`FileID:     ${fileId}`);
   console.log(`Chunks:     ${totalChunks}`);
 
-  return { qrDir, fileId, totalChunks, archiveName };
+  return { qrDir, fileId, totalChunks, nameBase, metaExt };
 }
 
 if (require.main === module) {
@@ -313,7 +263,6 @@ if (require.main === module) {
   const input = argv[0];
   const outDir = argv[1] && !argv[1].startsWith('-') ? argv[1] : process.cwd();
   if (!input) { console.error('Usage: bun run encode <input_file_or_dir> [output_dir]'); process.exit(1); }
-  encode(input, outDir).catch((e) => { console.error(e.message || e); process.exit(1); });
+  encode(input, outDir).catch((e)=>{ console.error(e.message || e); process.exit(1); });
 }
-
 module.exports = { encode };
