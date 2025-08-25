@@ -48,8 +48,6 @@ async function promptPasswords(defaultCount=2){
   }
   return parts.join('\u0000');
 }
-
-function isImageFile(name){ return /\.(png|jpg|jpeg)$/i.test(name); }
 function listFragmentsFlexible(p){
   const st = fs.existsSync(p) ? fs.statSync(p) : null;
   if(st && st.isFile()) return [path.resolve(p)];
@@ -90,7 +88,9 @@ async function decode(inputPath, outputDir=process.cwd(), passwords){
   let cipherSha256=null, expectedTotal=null, kdf=null, salt=null, nonce=null;
 
   if(fs.existsSync(input) && fs.statSync(input).isDirectory()){
-    const imgs = fs.readdirSync(input).filter(isImageFile).map(f=>path.join(input,f));
+    const imgs = fs.readdirSync(input)
+      .map(f=>path.join(input,f))
+      .filter(f=>fs.statSync(f).isFile());
     if(imgs.length){
       const results = await runDecodePool(imgs);
       const acc = new Map();
