@@ -38,30 +38,21 @@ const MARGIN = parseInt(process.env.QR_MARGIN || '1', 10);
 const MAX_WORKERS = Math.max(1, parseInt(process.env.QR_WORKERS || String(os.cpus().length), 10));
 
 /* ---------------- Password (hidden) ---------------- */
-function promptHidden(question, { confirm = false } = {}) {
+function promptHidden(question) {
   return new Promise((resolve, reject) => {
     if (!process.stdin.isTTY) return reject(new Error('No interactive TTY is available for password input'));
-    const readOnce = (q) => new Promise((res, rej) => {
-      process.stdout.write(q);
-      const stdin = process.stdin;
-      let buf = '';
-      const onData = (d) => {
-        const s = d.toString('utf8');
-        if (s === '\u0003') { cleanup(); process.stdout.write('\n'); rej(new Error('Operation cancelled')); return; }
-        if (s === '\r' || s === '\n') { cleanup(); process.stdout.write('\n'); res(buf); return; }
-        if (s === '\u0008' || s === '\u007f') { buf = buf.slice(0, -1); return; }
-        buf += s;
-      };
-      const cleanup = () => { stdin.setRawMode(false); stdin.pause(); stdin.removeListener('data', onData); };
-      stdin.setRawMode(true); stdin.resume(); stdin.on('data', onData);
-    });
-    (async () => {
-      const p1 = await readOnce(question);
-      if (!confirm) return p1;
-      const p2 = await readOnce('Repeat password: ');
-      if (p1 !== p2) throw new Error('Passwords do not match');
-      return p1;
-    })().then(resolve, reject);
+    process.stdout.write(question);
+    const stdin = process.stdin;
+    let buf = '';
+    const onData = (d) => {
+      const s = d.toString('utf8');
+      if (s === '\u0003') { cleanup(); process.stdout.write('\n'); reject(new Error('Operation cancelled')); return; }
+      if (s === '\r' || s === '\n') { cleanup(); process.stdout.write('\n'); resolve(buf); return; }
+      if (s === '\u0008' || s === '\u007f') { buf = buf.slice(0, -1); return; }
+      buf += s;
+    };
+    const cleanup = () => { stdin.setRawMode(false); stdin.pause(); stdin.removeListener('data', onData); };
+    stdin.setRawMode(true); stdin.resume(); stdin.on('data', onData);
   });
 }
 
@@ -69,7 +60,7 @@ async function promptPasswordCount(def = 2) {
   if (!process.stdin.isTTY) throw new Error('No interactive TTY is available for password input');
   return await new Promise((resolve) => {
     const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-    rl.question(`Number of passwords [${def}]: `, (ans) => {
+    rl.question('AMOUNT NUMBER OF PASSWORD: ', (ans) => {
       rl.close();
       const n = parseInt(ans, 10);
       resolve(Number.isFinite(n) && n > 0 ? n : def);
@@ -81,7 +72,7 @@ async function promptPasswords(defaultCount = 2) {
   const count = await promptPasswordCount(defaultCount);
   const parts = [];
   for (let i = 1; i <= count; i++) {
-    const p = await promptHidden(`Password #${i}: `, { confirm: true });
+    const p = await promptHidden(`Password #${i}: `);
     if (!p || p.length < 8) throw new Error('Password must be at least 8 characters long.');
     parts.push(p);
   }

@@ -216,19 +216,29 @@ async function encryptFolder() {
   if (!pw) { log('No passwords provided'); return; }
   log('Encrypting folder ...');
   try {
-    const zipSrc = new JSZip();
-    for (const file of selectedFiles) {
-      const path = file.webkitRelativePath || file.relativePath || file.name;
-      zipSrc.file(path, file);
+    let data;
+    let ext;
+    if (selectedFiles.length === 1 && !(selectedFiles[0].webkitRelativePath || selectedFiles[0].relativePath)) {
+      const file = selectedFiles[0];
+      data = new Uint8Array(await file.arrayBuffer());
+      const idx = file.name.lastIndexOf('.');
+      ext = idx >= 0 ? file.name.slice(idx + 1) : '';
+    } else {
+      const zipSrc = new JSZip();
+      for (const file of selectedFiles) {
+        const path = file.webkitRelativePath || file.relativePath || file.name;
+        zipSrc.file(path, file);
+      }
+      data = await zipSrc.generateAsync({ type: 'uint8array' });
+      ext = 'zip';
     }
-    const zipped = await zipSrc.generateAsync({ type: 'uint8array' });
     const enc = new TextEncoder();
     const pwKey = await crypto.subtle.importKey('raw', enc.encode(pw), 'PBKDF2', false, ['deriveKey']);
     const salt = crypto.getRandomValues(new Uint8Array(16));
     const key = await crypto.subtle.deriveKey({ name: 'PBKDF2', salt, iterations: 100000, hash: 'SHA-256' }, pwKey, { name: 'AES-GCM', length: 256 }, false, ['encrypt']);
     const iv = crypto.getRandomValues(new Uint8Array(12));
-    const cipher = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, zipped);
-    const extBytes = new TextEncoder().encode('zip');
+    const cipher = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, data);
+    const extBytes = new TextEncoder().encode(ext);
     const out = new Uint8Array(1 + extBytes.length + salt.length + iv.length + cipher.byteLength);
     let offset = 0;
     out[offset++] = extBytes.length;
@@ -363,7 +373,7 @@ async function decryptFolder() {
     const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, cipher);
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([plain]));
-    a.download = 'decoded.zip';
+    a.download = `decoded.${ext || 'bin'}`;
     a.click();
     log('Decryption complete. Extension: .' + ext);
   } catch (e) {
