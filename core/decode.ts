@@ -85,8 +85,8 @@ async function decode(inputPath, outputDir=process.cwd(), passwords){
   // STEP 1: collect
   stepStart(1,'collect data');
   let chunks=[];
-  let nameBase=null;   // БЕЗ расширения
-  let metaExt=null;    // С расширением (".zip", ".png", ...)
+  let nameBase=null;   // without extension
+  let metaExt=null;    // with extension (".zip", ".png", ...)
   let cipherSha256=null, expectedTotal=null, kdf=null, salt=null, nonce=null;
 
   if(fs.existsSync(input) && fs.statSync(input).isDirectory()){
@@ -183,7 +183,7 @@ async function decode(inputPath, outputDir=process.cwd(), passwords){
     stepDone(1);
   } catch { stepDone(0); console.error("Decryption failed. Wrong password or corrupted data."); process.exit(1); }
 
-  // STEP 4: write as <name><ext> (ext может быть пустым — тогда без расширения)
+  // STEP 4: write as <name><ext> (ext may be empty — then no extension)
   stepStart(4,'write output');
   let ext = String(metaExt || '');
   if(ext && !ext.startsWith('.')) ext = '.'+ext;
