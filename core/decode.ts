@@ -9,6 +9,14 @@ const crypto = require('crypto');
 const { Worker } = require('worker_threads');
 const readline = require('readline');
 
+function scryptAsync(password, salt, keylen, opts){
+  return new Promise((resolve, reject)=>{
+    crypto.scrypt(password, salt, keylen, opts, (err, derivedKey)=>{
+      if(err) reject(err); else resolve(derivedKey);
+    });
+  });
+}
+
 const FRAGMENT_TYPE = "GitZipQR-CHUNK-ENC";
 const MAX_WORKERS = Math.max(1, parseInt(process.env.QR_WORKERS || String(os.cpus().length), 10));
 
@@ -169,9 +177,14 @@ async function decode(inputPath, outputDir=process.cwd(), passwords){
   stepStart(3,'decrypt');
   if(!(nameBase!=null && metaExt!=null)){ stepDone(0); console.error("Meta name/ext missing. Re-encode with newer encoder."); process.exit(1); }
   if(!(salt && nonce)) { stepDone(0); console.error("Crypto parameters are missing."); process.exit(1); }
-  const pass = await (async()=>{ try{ return (await promptPasswords()); } catch(e){ stepDone(0); throw e; } })();
+  const pass = Array.isArray(passwords) && passwords.length
+    ? passwords.join('\u0000')
+    : await (async()=>{ try{ return (await promptPasswords()); } catch(e){ stepDone(0); throw e; } })();
 
-  const key = crypto.scryptSync(pass, salt, 32, { N:kdf.N, r:kdf.r, p:kdf.p, maxmem:512*1024*1024 });
+  let key;
+  try {
+    key = await scryptAsync(pass, salt, 32, { N:kdf.N, r:kdf.r, p:kdf.p, maxmem:512*1024*1024 });
+  } catch(e){ stepDone(0); console.error('KDF failed: ' + (e.message || e)); process.exit(1); }
   const tag = encBuffer.subarray(encBuffer.length-16);
   const ciphertext = encBuffer.subarray(0, encBuffer.length-16);
 

@@ -11,6 +11,14 @@ const { Worker } = require('worker_threads');
 const { spawnSync } = require('child_process');
 const readline = require('readline');
 
+function scryptAsync(password, salt, keylen, opts){
+  return new Promise((resolve, reject)=>{
+    crypto.scrypt(password, salt, keylen, opts, (err, derivedKey)=>{
+      if(err) reject(err); else resolve(derivedKey);
+    });
+  });
+}
+
 const SCRYPT = {
   N: parseInt(process.env.SCRYPT_N || (1 << 15), 10),
   r: parseInt(process.env.SCRYPT_r || 8, 10),
@@ -171,7 +179,7 @@ async function encode(inputPath, outputDir = path.join(process.cwd(), 'qrcodes')
   const nonce = crypto.randomBytes(12);
   let encPath;
   try{
-    const key = crypto.scryptSync(PASSPHRASE, salt, 32, { N:SCRYPT.N, r:SCRYPT.r, p:SCRYPT.p, maxmem:512*1024*1024 });
+    const key = await scryptAsync(PASSPHRASE, salt, 32, { N:SCRYPT.N, r:SCRYPT.r, p:SCRYPT.p, maxmem:512*1024*1024 });
     const cipher = crypto.createCipheriv('aes-256-gcm', key, nonce);
     encPath = path.join(tmpRoot, 'payload.enc');
     await new Promise((resolve,reject)=>{
