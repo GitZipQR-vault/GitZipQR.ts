@@ -193,9 +193,12 @@ async function encode(inputPath, outputBaseDir = process.cwd(), passwords) {
   const absInput = path.resolve(inputPath);
   const stInput = fs.statSync(absInput);
   let archiveName = path.basename(absInput);
-  let dataPath;
   if (stInput.isDirectory()) {
     archiveName += '.zip';
+  }
+  const archiveExt = path.extname(archiveName);
+  let dataPath;
+  if (stInput.isDirectory()) {
     dataPath = path.join(tmpRoot, archiveName);
     try {
       await new Promise((resolve, reject) => {
@@ -254,6 +257,7 @@ async function encode(inputPath, outputBaseDir = process.cwd(), passwords) {
     version: "3.1-inline-only",
     fileId: crypto.createHash('sha256').update(archiveName + ':' + cipherSha256).digest('hex').slice(0, 16),
     name: archiveName,
+    ext: archiveExt,
     chunk: 0, total: 1,
     hash: ''.padStart(64, '0'),
     cipherHash: cipherSha256,
@@ -293,8 +297,13 @@ async function encode(inputPath, outputBaseDir = process.cwd(), passwords) {
       const payload = {
         type: FRAGMENT_TYPE,
         version: "3.1-inline-only",
-        fileId, name: archiveName, chunk: i, total: totalChunks,
-        hash: chunkHash, cipherHash: cipherSha256,
+        fileId,
+        name: archiveName,
+        ext: archiveExt,
+        chunk: i,
+        total: totalChunks,
+        hash: chunkHash,
+        cipherHash: cipherSha256,
         dataB64: b64,
         kdfParams: { N: SCRYPT.N, r: SCRYPT.r, p: SCRYPT.p },
         saltB64: salt.toString('base64'),
