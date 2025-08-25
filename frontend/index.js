@@ -301,6 +301,22 @@ function fromBase64(b64) {
   return bytes;
 }
 
+async function decodeQR(file) {
+  if (typeof window !== 'undefined' && 'BarcodeDetector' in window) {
+    try {
+      const detector = new BarcodeDetector({ formats: ['qr_code'] });
+      const bitmap = await createImageBitmap(file);
+      const [code] = await detector.detect(bitmap);
+      if (code) return code.rawValue;
+    } catch (_) {}
+  }
+  const jsqr = typeof jsQR !== 'undefined' ? jsQR : (typeof window !== 'undefined' ? window.jsQR : null);
+  if (typeof jsqr !== 'function') throw new Error('No QR decoder available');
+  const img = await fileToImageData(file);
+  const qr = jsqr(img.data, img.width, img.height);
+  return qr ? qr.data : '';
+}
+
 async function decryptFolder() {
   if (!selectedFiles.length) { log('No files selected'); return; }
   const pwEls = passwordsDiv.querySelectorAll('input');
@@ -308,14 +324,10 @@ async function decryptFolder() {
   if (!pw) { log('No passwords provided'); return; }
   log('Decrypting folder ...');
   try {
-    const jsqr = typeof jsQR !== 'undefined' ? jsQR : (typeof window !== 'undefined' ? window.jsQR : null);
-    if (typeof jsqr !== 'function') throw new Error('jsQR is not available');
     const files = selectedFiles.slice().sort((a,b)=>a.name.localeCompare(b.name));
     let base64 = '';
     for (const file of files) {
-      const img = await fileToImageData(file);
-      const code = jsqr(img.data, img.width, img.height);
-      if (code) base64 += code.data;
+      base64 += await decodeQR(file);
     }
     const bytes = fromBase64(base64);
     let offset = 0;
