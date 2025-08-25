@@ -170,47 +170,58 @@ async function calibrateMaxDataB64(basePayloadWithoutData) {
   return Math.floor(lo * 0.92);
 }
 
-/* ---------------- Args & Dirs ---------------- */
-const argv = process.argv.slice(2);
-const inputDir = argv[0];
-const outputBaseDir = argv[1] && !argv[1].startsWith('-') ? argv[1] : process.cwd();
-if (!inputDir) { console.error("Usage: bun run encode <input_dir> [output_dir]"); process.exit(1); }
-const qrDir = path.join(outputBaseDir, 'qrcodes');
-if (!fs.existsSync(qrDir)) fs.mkdirSync(qrDir, { recursive: true });
+/* ---------------- Main API ---------------- */
+async function encode(inputPath, outputBaseDir = process.cwd(), passwords) {
+  const qrDir = path.join(outputBaseDir, 'qrcodes');
+  if (!fs.existsSync(qrDir)) fs.mkdirSync(qrDir, { recursive: true });
 
-(async () => {
   // STEP 1: password
   stepStart(1, 'password');
   let PASSPHRASE;
-  try { PASSPHRASE = await promptPasswords(); }
-  catch (e) { stepDone(0); console.error(e.message || e); process.exit(1); }
+  try {
+    PASSPHRASE = Array.isArray(passwords) && passwords.length
+      ? passwords.join('\u0000')
+      : await promptPasswords();
+  } catch (e) {
+    stepDone(0); throw e;
+  }
   stepDone(1);
 
-  // STEP 2: zip
-  stepStart(2, 'zip');
+  // STEP 2: prepare data (zip dir or copy file)
+  stepStart(2, 'prepare data');
   const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'gitzipqr-'));
-  const archiveName = path.basename(path.resolve(inputDir)) + ".zip";
-  const zipPath = path.join(tmpRoot, archiveName);
-  try {
-    await new Promise((resolve, reject) => {
-      const out = fs.createWriteStream(zipPath);
-      const ar = archiver('zip', { zlib: { level: 9 } });
-      out.on('close', resolve);
-      ar.on('warning', reject);
-      ar.on('error', reject);
-      ar.pipe(out);
-      ar.directory(inputDir, false, (entry) => {
-        entry.stats = entry.stats || {};
-        entry.stats.mtime = new Date(0);
-        entry.stats.atime = new Date(0);
-        entry.stats.ctime = new Date(0);
-        return entry;
+  const absInput = path.resolve(inputPath);
+  const stInput = fs.statSync(absInput);
+  let archiveName = path.basename(absInput);
+  let dataPath;
+  if (stInput.isDirectory()) {
+    archiveName += '.zip';
+    dataPath = path.join(tmpRoot, archiveName);
+    try {
+      await new Promise((resolve, reject) => {
+        const out = fs.createWriteStream(dataPath);
+        const ar = archiver('zip', { zlib: { level: 9 } });
+        out.on('close', resolve);
+        ar.on('warning', reject);
+        ar.on('error', reject);
+        ar.pipe(out);
+        ar.directory(absInput, false, (entry) => {
+          entry.stats = entry.stats || {};
+          entry.stats.mtime = new Date(0);
+          entry.stats.atime = new Date(0);
+          entry.stats.ctime = new Date(0);
+          return entry;
+        });
+        ar.finalize();
       });
-      ar.finalize();
-    });
+      stepDone(1);
+    } catch (e) {
+      stepDone(0); throw new Error('Zip failed: ' + (e.message || e));
+    }
+  } else {
+    dataPath = path.join(tmpRoot, archiveName);
+    fs.copyFileSync(absInput, dataPath);
     stepDone(1);
-  } catch (e) {
-    stepDone(0); console.error('Zip failed:', e.message || e); process.exit(1);
   }
 
   // STEP 3: encrypt (AES-256-GCM; key = scrypt(pass, salt))
@@ -223,7 +234,7 @@ if (!fs.existsSync(qrDir)) fs.mkdirSync(qrDir, { recursive: true });
     const cipher = crypto.createCipheriv('aes-256-gcm', key, nonce);
     encPath = path.join(tmpRoot, archiveName + '.enc');
     await new Promise((resolve, reject) => {
-      const input = fs.createReadStream(zipPath);
+      const input = fs.createReadStream(dataPath);
       const output = fs.createWriteStream(encPath);
       input.on('error', reject); output.on('error', reject); output.on('finish', resolve);
       input.pipe(cipher).pipe(output);
@@ -232,7 +243,7 @@ if (!fs.existsSync(qrDir)) fs.mkdirSync(qrDir, { recursive: true });
     fs.appendFileSync(encPath, tag);
     stepDone(1);
   } catch (e) {
-    stepDone(0); console.error('Encrypt failed:', e.message || e); process.exit(1);
+    stepDone(0); throw new Error('Encrypt failed: ' + (e.message || e));
   }
 
   // STEP 4: calibrate capacity
@@ -256,7 +267,7 @@ if (!fs.existsSync(qrDir)) fs.mkdirSync(qrDir, { recursive: true });
     maxDataB64 = await calibrateMaxDataB64(baseMeta);
     stepDone(1);
   } catch (e) {
-    stepDone(0); console.error('Calibration failed:', e.message || e); process.exit(1);
+    stepDone(0); throw new Error('Calibration failed: ' + (e.message || e));
   }
 
   // Choose optimal chunk size to fit 1 chunk per QR (≈ 3/4 of base64, minus tiny safety)
@@ -301,7 +312,7 @@ if (!fs.existsSync(qrDir)) fs.mkdirSync(qrDir, { recursive: true });
     }
     stepDone(1);
   } catch (e) {
-    stepDone(0); console.error('Chunking failed:', e.message || e); process.exit(1);
+    stepDone(0); throw new Error('Chunking failed: ' + (e.message || e));
   } finally {
     fs.closeSync(fd);
   }
@@ -310,11 +321,27 @@ if (!fs.existsSync(qrDir)) fs.mkdirSync(qrDir, { recursive: true });
   stepStart(6, 'encode QR in parallel');
   const { ok, fail } = await runPool(tasks);
   stepDone(fail === 0);
-  if (fail) { console.error(`Some QR tasks failed: ${fail}`); process.exit(1); }
+  if (fail) throw new Error(`Some QR tasks failed: ${fail}`);
+
   // STEP 7: summary
   console.log('\nDone.');
   console.log(`QRCodes:    ${qrDir}`);
   console.log(`Mode:       QR-ONLY (inline), ECL=${ECL}, workers=${MAX_WORKERS}${hasQrencode() ? ', native=qrencode' : ''}`);
   console.log(`FileID:     ${fileId}`);
   console.log(`Chunks:     ${totalChunks}`);
-})();
+
+  return { qrDir, fileId, totalChunks, archiveName };
+}
+
+if (require.main === module) {
+  const argv = process.argv.slice(2);
+  const input = argv[0];
+  const outDir = argv[1] && !argv[1].startsWith('-') ? argv[1] : process.cwd();
+  if (!input) {
+    console.error('Usage: bun run encode <input_file_or_dir> [output_dir]');
+    process.exit(1);
+  }
+  encode(input, outDir).catch((e) => { console.error(e.message || e); process.exit(1); });
+}
+
+module.exports = { encode };
