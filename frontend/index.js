@@ -301,6 +301,22 @@ function fromBase64(b64) {
   return bytes;
 }
 
+async function ensureJsQR() {
+  if (typeof window !== 'undefined' && typeof window.jsQR === 'function') {
+    return window.jsQR;
+  }
+  return new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/jsqr/1.4.0/jsQR.min.js';
+    script.onload = () => {
+      if (typeof window.jsQR === 'function') resolve(window.jsQR);
+      else reject(new Error('jsQR did not initialize'));
+    };
+    script.onerror = () => reject(new Error('Failed to load jsQR script'));
+    document.head.appendChild(script);
+  });
+}
+
 async function decodeQR(file) {
   if (typeof window !== 'undefined' && 'BarcodeDetector' in window) {
     try {
@@ -310,8 +326,12 @@ async function decodeQR(file) {
       if (code) return code.rawValue;
     } catch (_) {}
   }
-  const jsqr = typeof jsQR !== 'undefined' ? jsQR : (typeof window !== 'undefined' ? window.jsQR : null);
-  if (typeof jsqr !== 'function') throw new Error('No QR decoder available');
+  let jsqr;
+  try {
+    jsqr = await ensureJsQR();
+  } catch {
+    throw new Error('jsQR is not available');
+  }
   const img = await fileToImageData(file);
   const qr = jsqr(img.data, img.width, img.height);
   return qr ? qr.data : '';
