@@ -142,6 +142,7 @@ async function decode(inputPath, outputDir = process.cwd(), passwords) {
   stepStart(1, 'collect data');
   let chunks = [];
   let archiveName = null;
+  let archiveExt = null;
   let cipherSha256 = null;
   let expectedTotal = null;
   let kdf = null, salt = null, nonce = null;
@@ -164,6 +165,7 @@ async function decode(inputPath, outputDir = process.cwd(), passwords) {
           entry.total = m.partTotal || 1;
 
           if (!archiveName) archiveName = m.name;
+          if (!archiveExt && m.ext) archiveExt = m.ext;
           if (!cipherSha256) cipherSha256 = m.cipherHash;
           if (!kdf && m.kdfParams) kdf = m.kdfParams;
           if (!salt && m.saltB64) salt = Buffer.from(m.saltB64, 'base64');
@@ -209,6 +211,7 @@ async function decode(inputPath, outputDir = process.cwd(), passwords) {
       const frag = JSON.parse(fs.readFileSync(fp,'utf8'));
       if (frag.type !== FRAGMENT_TYPE) continue;
       if (!archiveName) archiveName = frag.name;
+      if (!archiveExt && frag.ext) archiveExt = frag.ext;
       const buf = Buffer.from(frag.data,'base64');
       const h  = crypto.createHash('sha256').update(buf).digest('hex');
       if (h !== frag.hash) { stepDone(0); console.error(`Chunk hash mismatch: ${path.basename(fp)}`); process.exit(1); }
@@ -255,6 +258,9 @@ async function decode(inputPath, outputDir = process.cwd(), passwords) {
   // STEP 4: write output
   stepStart(4, 'write output');
   let outName = archiveName || 'restored';
+  if (!path.extname(outName) && archiveExt) {
+    outName += archiveExt;
+  }
   if (!path.extname(outName)) {
     const ext = guessExtension(dataBuf);
     outName += ext || '.bin';
@@ -263,8 +269,9 @@ async function decode(inputPath, outputDir = process.cwd(), passwords) {
   fs.writeFileSync(outPath, dataBuf);
   stepDone(1);
 
-  if (archiveName && !archiveName.endsWith('.zip')) console.log(`\n✅ Restored file → ${outPath}`);
-  else console.log(`\n✅ Restored ZIP → ${outPath}`);
+  const finalExt = path.extname(outName);
+  if (finalExt === '.zip') console.log(`\n✅ Restored ZIP → ${outPath}`);
+  else console.log(`\n✅ Restored file → ${outPath}`);
 
   return outPath;
 }
