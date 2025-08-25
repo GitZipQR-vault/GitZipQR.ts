@@ -122,6 +122,14 @@ bun decode ./crypto/qrcodes ./restore
 cat ./restore/hello.txt
 ```
 
+### Sync Folders
+
+Copy new or changed files from one folder to another:
+
+```bash
+bun sync ./source ./dest
+```
+
 ### SDK
 
 Use the mini SDK for programmatic access from Node or the browser (via bundlers):
