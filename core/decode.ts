@@ -1,19 +1,7 @@
 /**
  * GitZipQR — Decoder
- * Restores an encrypted ZIP from:
- *  - a folder of QR images (PNG/JPG/JPEG), or
- *  - a folder of JSON fragments (*.bin.json), or a single fragment file. (legacy)
- *
- * Supports QR-ONLY (inline) mode primarily. Legacy external fragments are still accepted.
- *
- * Usage:
- *   bun run decode <qrcodes_or_fragments_dir_or_file> [output_dir]
- *
- * Performance features:
- *  - Parallel QR image decoding via worker pool
- *  - Step-wise progress: "STEP #N [1/0]"
+ * Restores an encrypted ZIP or single file from inline QR images or legacy fragments.
  */
-
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
@@ -27,7 +15,7 @@ const MAX_WORKERS = Math.max(1, parseInt(process.env.QR_WORKERS || String(os.cpu
 function stepStart(n, label) { process.stdout.write(`STEP #${n} ${label} ... `); }
 function stepDone(ok) { process.stdout.write(`[${ok ? 1 : 0}]\n`); }
 
-/* ---------------- Password (hidden) ---------------- */
+/* Password */
 function promptHidden(question) {
   return new Promise((resolve, reject) => {
     if (!process.stdin.isTTY) return reject(new Error('No interactive TTY is available for password input'));
@@ -44,19 +32,13 @@ function promptHidden(question) {
     stdin.setRawMode(true); stdin.resume(); stdin.on('data', onData);
   });
 }
-
 async function promptPasswordCount(def = 2) {
   if (!process.stdin.isTTY) throw new Error('No interactive TTY is available for password input');
   return await new Promise((resolve) => {
     const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-    rl.question('AMOUNT NUMBER OF PASSWORD: ', (ans) => {
-      rl.close();
-      const n = parseInt(ans, 10);
-      resolve(Number.isFinite(n) && n > 0 ? n : def);
-    });
+    rl.question('AMOUNT NUMBER OF PASSWORD: ', (ans) => { rl.close(); const n = parseInt(ans, 10); resolve(Number.isFinite(n) && n > 0 ? n : def); });
   });
 }
-
 async function promptPasswords(defaultCount = 2) {
   const count = await promptPasswordCount(defaultCount);
   const parts = [];
@@ -84,14 +66,14 @@ function listFragmentsFlexible(p) {
   return res;
 }
 
+/** Magic-based guess for fallback */
 function guessExtension(buf) {
   if (!buf || buf.length < 4) return '';
-  const b = buf;
-  if (b.slice(0,8).equals(Buffer.from('89504e470d0a1a0a', 'hex'))) return '.png';
-  if (b.slice(0,3).equals(Buffer.from('ffd8ff', 'hex'))) return '.jpg';
-  if (b.slice(0,4).equals(Buffer.from('47494638', 'hex'))) return '.gif';
-  if (b.slice(0,4).equals(Buffer.from('25504446', 'hex'))) return '.pdf';
-  if (b.slice(0,4).equals(Buffer.from('504b0304', 'hex'))) return '.zip';
+  if (buf.slice(0,8).equals(Buffer.from('89504e470d0a1a0a', 'hex'))) return '.png';
+  if (buf.slice(0,3).equals(Buffer.from('ffd8ff', 'hex'))) return '.jpg';
+  if (buf.slice(0,4).equals(Buffer.from('47494638', 'hex'))) return '.gif';
+  if (buf.slice(0,4).equals(Buffer.from('25504446', 'hex'))) return '.pdf';
+  if (buf.slice(0,4).equals(Buffer.from('504b0304', 'hex'))) return '.zip';
   return '';
 }
 
@@ -108,14 +90,9 @@ function runDecodePool(images) {
         w.once('message', (msg) => {
           active--;
           results[idx] = msg;
-          if ((idx + 1) % 100 === 0 || idx + 1 === images.length) {
-            process.stdout.write(`QR read ${idx + 1}/${images.length}\r`);
-          }
+          if ((idx + 1) % 100 === 0 || idx + 1 === images.length) process.stdout.write(`QR read ${idx + 1}/${images.length}\r`);
           if (i < images.length) launch();
-          else if (active === 0) {
-            process.stdout.write('\n');
-            resolve(results);
-          }
+          else if (active === 0) { process.stdout.write('\n'); resolve(results); }
         });
         w.once('error', () => { active--; results[idx] = { ok:false, error:'worker error' }; if (i < images.length) launch(); else if (active===0) resolve(results); });
       }
@@ -129,7 +106,7 @@ async function decode(inputPath, outputDir = process.cwd(), passwords) {
   if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir, { recursive: true });
   const input = path.resolve(inputPath);
 
-  // STEP 1: collect inline QR payloads or fallback to legacy fragments
+  // STEP 1: collect inline QR payloads or legacy fragments
   stepStart(1, 'collect data');
   let chunks = [];
   let archiveName = null;
@@ -156,6 +133,7 @@ async function decode(inputPath, outputDir = process.cwd(), passwords) {
           entry.total = m.partTotal || 1;
 
           if (!archiveName) archiveName = m.name;
+          // важное: заберём ext даже если name без расширения
           if (!archiveExt && m.ext) archiveExt = m.ext;
           if (!cipherSha256) cipherSha256 = m.cipherHash;
           if (!kdf && m.kdfParams) kdf = m.kdfParams;
@@ -187,7 +165,7 @@ async function decode(inputPath, outputDir = process.cwd(), passwords) {
       process.exit(1);
     }
   } else {
-    // legacy path: .bin.json fragments + manifest.json nearby
+    // legacy fragments path
     const manifestPath = [path.join(path.dirname(input),'manifest.json'), path.join(input,'manifest.json'), path.join(process.cwd(),'manifest.json')].find(p=>fs.existsSync(p));
     if (!manifestPath) { stepDone(0); console.error("No manifest.json for legacy fragments."); process.exit(1); }
     const manifest = JSON.parse(fs.readFileSync(manifestPath,'utf8'));
@@ -196,6 +174,7 @@ async function decode(inputPath, outputDir = process.cwd(), passwords) {
     kdf   = manifest.kdfParams || manifest.kdf_params;
     salt  = Buffer.from(manifest.saltB64  || manifest.salt_b64 , 'base64');
     nonce = Buffer.from(manifest.nonceB64 || manifest.nonce_b64, 'base64');
+    archiveExt = manifest.ext || manifest.archive_ext || null;
     let fragmentFiles = listFragmentsFlexible(input);
     if (!fragmentFiles.length) { stepDone(0); console.error("No *.bin.json fragments found."); process.exit(1); }
     for (const fp of fragmentFiles) {
@@ -222,15 +201,12 @@ async function decode(inputPath, outputDir = process.cwd(), passwords) {
   }
   stepDone(1);
 
-  // STEP 3: decrypt AES-256-GCM
+  // STEP 3: decrypt
   stepStart(3, 'decrypt');
   if (!(kdf && salt && nonce)) { stepDone(0); console.error("Crypto parameters are missing in QR payloads. Re-encode inline."); process.exit(1); }
   let pass;
-  try {
-    pass = Array.isArray(passwords) && passwords.length ? passwords.join('\u0000') : await promptPasswords();
-  } catch (e) {
-    stepDone(0); throw e;
-  }
+  try { pass = Array.isArray(passwords) && passwords.length ? passwords.join('\u0000') : await promptPasswords(); }
+  catch (e) { stepDone(0); throw e; }
 
   const key = crypto.scryptSync(pass, salt, 32, { N: kdf.N, r: kdf.r, p: kdf.p, maxmem: 512*1024*1024 });
   const tag        = encBuffer.subarray(encBuffer.length - 16);
@@ -246,16 +222,19 @@ async function decode(inputPath, outputDir = process.cwd(), passwords) {
     stepDone(0); console.error("Decryption failed. Wrong password or corrupted data."); process.exit(1);
   }
 
-  // STEP 4: write output
+  // STEP 4: write output (prefer ext from meta)
   stepStart(4, 'write output');
   let outName = archiveName || 'restored';
-  if (!path.extname(outName) && archiveExt) {
-    outName += archiveExt;
-  }
+  let desiredExt = (archiveExt && String(archiveExt)) || '';
+  if (desiredExt && !desiredExt.startsWith('.')) desiredExt = '.' + desiredExt;
+
+  // если у имени нет расширения — добавим то, что прислали в meta
+  if (!path.extname(outName) && desiredExt) outName += desiredExt;
   if (!path.extname(outName)) {
     const ext = guessExtension(dataBuf);
-    outName += ext || '.bin';
+    if (ext) outName += ext; else outName += '.bin';
   }
+
   const outPath = path.join(outputDir, outName);
   fs.writeFileSync(outPath, dataBuf);
   stepDone(1);
@@ -270,10 +249,7 @@ async function decode(inputPath, outputDir = process.cwd(), passwords) {
 if (require.main === module) {
   const inputArg = process.argv[2];
   const outputDir = (process.argv[3] && !process.argv[3].startsWith('-')) ? process.argv[3] : process.cwd();
-  if (!inputArg) {
-    console.error("Usage: bun run decode <qrcodes_or_fragments_dir_or_file> [output_dir]");
-    process.exit(1);
-  }
+  if (!inputArg) { console.error("Usage: bun run decode <qrcodes_or_fragments_dir_or_file> [output_dir]"); process.exit(1); }
   decode(inputArg, outputDir).catch((e) => { console.error(e.message || e); process.exit(1); });
 }
 
