@@ -3,6 +3,7 @@
 #include <fstream>
 #include <vector>
 #include <string>
+#include <filesystem>
 
 int main(int argc, char* argv[]) {
     if (argc < 3) {
@@ -11,6 +12,16 @@ int main(int argc, char* argv[]) {
     }
     std::string inPath = argv[1];
     std::string outPath = argv[2];
+
+    namespace fs = std::filesystem;
+    if (!fs::exists(inPath) || fs::is_directory(inPath)) {
+        std::cerr << "Input path must be a regular file" << std::endl;
+        return 1;
+    }
+    if (fs::exists(outPath) && fs::is_directory(outPath)) {
+        std::cerr << "Output path cannot be a directory" << std::endl;
+        return 1;
+    }
 
     std::cout << "Password: ";
     std::string password;
