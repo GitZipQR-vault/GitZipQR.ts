@@ -10,14 +10,12 @@ const archiver = require('archiver');
 const { Worker } = require('worker_threads');
 const { spawnSync } = require('child_process');
 const readline = require('readline');
+const ffi = require('ffi-napi');
 
-function scryptAsync(password, salt, keylen, opts){
-  return new Promise((resolve, reject)=>{
-    crypto.scrypt(password, salt, keylen, opts, (err, derivedKey)=>{
-      if(err) reject(err); else resolve(derivedKey);
-    });
-  });
-}
+const LIB_PATH = path.join(__dirname, '..', 'native', 'libgitzipqr_crypto.so');
+const cryptoLib = ffi.Library(LIB_PATH, {
+  aes256gcm_encrypt: ['int', ['string','string','string','string','string','uint','uint','uint']]
+});
 
 const SCRYPT = {
   N: parseInt(process.env.SCRYPT_N || (1 << 15), 10),
@@ -177,18 +175,19 @@ async function encode(inputPath, outputDir = path.join(process.cwd(), 'qrcodes')
   stepStart(3,'encrypt');
   const salt = crypto.randomBytes(16);
   const nonce = crypto.randomBytes(12);
-  let encPath;
+  const encPath = path.join(tmpRoot, 'payload.enc');
   try{
-    const key = await scryptAsync(PASSPHRASE, salt, 32, { N:SCRYPT.N, r:SCRYPT.r, p:SCRYPT.p, maxmem:512*1024*1024 });
-    const cipher = crypto.createCipheriv('aes-256-gcm', key, nonce);
-    encPath = path.join(tmpRoot, 'payload.enc');
-    await new Promise((resolve,reject)=>{
-      const input = fs.createReadStream(dataPath);
-      const output= fs.createWriteStream(encPath);
-      input.on('error',reject); output.on('error',reject); output.on('finish',resolve);
-      input.pipe(cipher).pipe(output);
-    });
-    const tag = cipher.getAuthTag(); fs.appendFileSync(encPath, tag);
+    const res = cryptoLib.aes256gcm_encrypt(
+      dataPath,
+      encPath,
+      PASSPHRASE,
+      salt.toString('hex'),
+      nonce.toString('hex'),
+      SCRYPT.N,
+      SCRYPT.r,
+      SCRYPT.p
+    );
+    if(res !== 0) throw new Error('Encrypt failed: code '+res);
     stepDone(1);
   } catch(e){ stepDone(0); throw new Error('Encrypt failed: ' + (e.message || e)); }
 

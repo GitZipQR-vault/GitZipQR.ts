@@ -9,3 +9,5 @@ Program/node_modules/
 /fragments/
 *.zip
 *.enc
+*.so
+*.o

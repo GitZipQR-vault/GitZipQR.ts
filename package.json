@@ -19,6 +19,7 @@
   },
   "dependencies": {
     "archiver": "^7.0.1",
+    "ffi-napi": "^4.0.3",
     "jimp": "^1.6.0",
     "jpeg-js": "^0.4.4",
     "jsqr": "^1.4.0",
