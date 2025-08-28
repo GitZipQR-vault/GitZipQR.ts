@@ -15,8 +15,9 @@ This produces `bin/encode` and `bin/decode`.
 
 ### Encrypt
 ```bash
-bin/encode <input_file> <output_file>
+bin/encode <input_path> <output_file>
 ```
+If `<input_path>` is a directory, it is zipped before encryption.
 The program prompts for a passphrase, derives a key using scrypt and encrypts
 the input with AES‑256‑GCM.  The output file contains salt, nonce, ciphertext
 and authentication tag.

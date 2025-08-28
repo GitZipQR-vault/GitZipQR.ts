@@ -5,6 +5,8 @@
 #include <vector>
 #include <string>
 #include <filesystem>
+#include <cstdlib>
+#include <cstdio>
 
 int main(int argc, char* argv[]) {
     if (argc < 3) {
@@ -15,9 +17,22 @@ int main(int argc, char* argv[]) {
     std::string outPath = argv[2];
 
     namespace fs = std::filesystem;
-    if (!fs::exists(inPath) || fs::is_directory(inPath)) {
-        std::cerr << "Input path must be a regular file" << std::endl;
+    if (!fs::exists(inPath)) {
+        std::cerr << "Input path must exist" << std::endl;
         return 1;
+    }
+    bool isDir = fs::is_directory(inPath);
+    fs::path tempZip;
+    if (isDir) {
+        char tmpName[L_tmpnam];
+        std::tmpnam(tmpName);
+        tempZip = fs::temp_directory_path() / (std::string(tmpName) + std::string(".zip"));
+        std::string cmd = "zip -r -q \"" + tempZip.string() + "\" \"" + inPath + "\"";
+        if (std::system(cmd.c_str()) != 0) {
+            std::cerr << "Failed to zip directory" << std::endl;
+            return 1;
+        }
+        inPath = tempZip.string();
     }
     if (fs::exists(outPath) && fs::is_directory(outPath)) {
         std::cerr << "Output path cannot be a directory" << std::endl;
@@ -115,6 +130,9 @@ int main(int argc, char* argv[]) {
     fout.close();
 
     std::cout << "Encrypted to " << outPath << std::endl;
+    if (isDir) {
+        fs::remove(tempZip);
+    }
     return 0;
 }
 
