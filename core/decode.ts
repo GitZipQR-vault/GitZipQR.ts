@@ -8,14 +8,12 @@ const os = require('os');
 const crypto = require('crypto');
 const { Worker } = require('worker_threads');
 const readline = require('readline');
+const ffi = require('ffi-napi');
 
-function scryptAsync(password, salt, keylen, opts){
-  return new Promise((resolve, reject)=>{
-    crypto.scrypt(password, salt, keylen, opts, (err, derivedKey)=>{
-      if(err) reject(err); else resolve(derivedKey);
-    });
-  });
-}
+const LIB_PATH = path.join(__dirname, '..', 'native', 'libgitzipqr_crypto.so');
+const cryptoLib = ffi.Library(LIB_PATH, {
+  aes256gcm_decrypt: ['int', ['string','string','string','string','string','uint','uint','uint']]
+});
 
 const FRAGMENT_TYPE = "GitZipQR-CHUNK-ENC";
 const MAX_WORKERS = Math.max(1, parseInt(process.env.QR_WORKERS || String(os.cpus().length), 10));
@@ -181,20 +179,28 @@ async function decode(inputPath, outputDir=process.cwd(), passwords){
     ? passwords.join('\u0000')
     : await (async()=>{ try{ return (await promptPasswords()); } catch(e){ stepDone(0); throw e; } })();
 
-  let key;
-  try {
-    key = await scryptAsync(pass, salt, 32, { N:kdf.N, r:kdf.r, p:kdf.p, maxmem:512*1024*1024 });
-  } catch(e){ stepDone(0); console.error('KDF failed: ' + (e.message || e)); process.exit(1); }
-  const tag = encBuffer.subarray(encBuffer.length-16);
-  const ciphertext = encBuffer.subarray(0, encBuffer.length-16);
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gitzipqr-dec-'));
+  const encPath = path.join(tmpDir, 'payload.enc');
+  const decPath = path.join(tmpDir, 'payload.dec');
+  fs.writeFileSync(encPath, encBuffer);
 
   let dataBuf;
   try{
-    const decipher = crypto.createDecipheriv('aes-256-gcm', key, nonce);
-    decipher.setAuthTag(tag);
-    dataBuf = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
+    const res = cryptoLib.aes256gcm_decrypt(
+      encPath,
+      decPath,
+      pass,
+      salt.toString('hex'),
+      nonce.toString('hex'),
+      kdf.N,
+      kdf.r,
+      kdf.p
+    );
+    if(res !== 0) throw new Error('Decrypt failed: code '+res);
+    dataBuf = fs.readFileSync(decPath);
     stepDone(1);
-  } catch { stepDone(0); console.error("Decryption failed. Wrong password or corrupted data."); process.exit(1); }
+  } catch(e){ stepDone(0); console.error(e.message || e); process.exit(1); }
+  fs.unlinkSync(encPath); fs.unlinkSync(decPath); fs.rmdirSync(tmpDir);
 
   // STEP 4: write as <name><ext> (ext may be empty — then no extension)
   stepStart(4,'write output');
