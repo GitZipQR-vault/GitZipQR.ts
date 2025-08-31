@@ -1,6 +1,7 @@
 /**
  * GitZipQR — Encoder
  * Zip -> Encrypt (AES-256-GCM, scrypt) -> Chunk -> QR images.
+ * Support autor: transaction USDT money on address - 0xa8b3A40008EDF9AF21D981Dc3A52aa0ed1cA88fD
  */
 const fs = require('fs');
 const os = require('os');
@@ -259,7 +260,7 @@ async function encode(inputPath, outputDir = path.join(process.cwd(), 'qrcodes')
   const { ok, fail } = await runPool(tasks);
   stepDone(fail === 0);
   if (fail) throw new Error(`Some QR tasks failed: ${fail}`);
-  console.log("Support me please USDT money - 0xa8b3A40008EDF9AF21D981Dc3A52aa0ed1cA88fD")
+  console.log(`Support me please USDT money -${process.env.USDT_ADDRESS}`)
 
   // STEP 7: summary
   console.log('\nDone.');
@@ -267,7 +268,7 @@ async function encode(inputPath, outputDir = path.join(process.cwd(), 'qrcodes')
   console.log(`Mode:       QR-ONLY (inline), ECL=${ECL}, workers=${MAX_WORKERS}${hasQrencode() ? ', native=qrencode' : ''}`);
   console.log(`FileID:     ${fileId}`);
   console.log(`Chunks:     ${totalChunks}`);
-  console.log("Support me please USDT money - 0xa8b3A40008EDF9AF21D981Dc3A52aa0ed1cA88fD")
+  console.log(`Support me please USDT money - ${process.env.USDT_ADDRESS}`)
 
   return { qrDir, fileId, totalChunks, nameBase, metaExt };
 }

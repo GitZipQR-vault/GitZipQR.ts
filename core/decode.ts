@@ -1,6 +1,7 @@
 /**
  * GitZipQR — Decoder
  * Always restore output file as: <meta.name><meta.ext>
+ * Support autor: transaction USDT money on address - 0xa8b3A40008EDF9AF21D981Dc3A52aa0ed1cA88fD
  */
 const fs = require('fs');
 const path = require('path');
