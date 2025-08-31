@@ -1,4 +1,6 @@
-# GitZipQR — Secure Archives via Inline QR Codes 📦🔐📱
+# Supported LINUX CLI
+----
+GitZipQR — Secure Archives via Inline QR Codes 📦🔐📱
 
 ![GitZipQR Structure](https://github.com/RestlessByte/GitZipQR/blob/main/assets/structures/structures.png)
 
