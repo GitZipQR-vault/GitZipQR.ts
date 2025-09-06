@@ -1,7 +1,7 @@
 # Supported LINUX CLI
 ----
 GitZipQR — Secure Archives via Inline QR Codes 📦🔐📱
-
+[C++ code - max performance](https://github.com/RestlessByte/GitZipQR.cpp)
 ![GitZipQR Structure](https://github.com/RestlessByte/GitZipQR/blob/main/assets/structures/structures.png)
 
 **Author:** Daniil (RestlessByte) — https://github.com/RestlessByte  
